@@ -1,2 +1,3 @@
-# CWC_allometry
-code for processing CWC allometry data
+# Processing CWC allometry data
+
+[Usage: parameterizing allometric equations](https://github.com/troyhill/CWC_allometry/wiki/Calculate-allometry-parameters)
