@@ -271,3 +271,80 @@ batch <- function (inputList, fun, ...) {
   outputObj
 }
 
+
+
+
+plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
+  procData <- getAllometryParams(dataset = monthlyData, returnData = "TRUE", sitesIncluded = site)
+  
+  living <- c("Live", "coef.live", "exp.live", "live")
+  dying <- c("Dead", "coef.dead", "exp.dead", "dead")
+
+  if (save %in% c("TRUE", "True", "true", "T")) {
+    png(filename = paste0("Allom-", procData[[2]]$time, ".png"), width = 15, height = 8, units = "cm", res = 300)
+  }
+  if (type %in% c("live", "Live", "LIVE", "both", "Both", "BOTH")) {
+     if (type %in% c("both", "Both", "BOTH"))  {
+      par(mar = c(4, 4, 0.3, 0.5), fig = c(0, 0.48, 0, 1))
+    } else if (!type %in% c("both", "Both", "BOTH")) {
+      par(mar = c(4, 4, 0.3, 0.5), fig = c(0, 1, 0, 1))
+    }
+    plot(procData[[2]]$mass ~ procData[[2]]$hgt,
+         ylab = "mass (g)", xlab = "height (cm)",
+         type = "n", las = 1)
+    
+    for (i in 1:nrow(procData[[1]])) {
+      points(x = procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% living[1])], 
+             y = procData[[2]]$mass[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% living[1])], 
+             pch = i, cex = 0.8, las = 1)
+      # predicted values
+      min.x <- min(procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% living[1])], na.rm = T)
+      max.x <- max(procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% living[1])], na.rm = T)
+      xVals <- c((min.x * 100):(max.x * 100)) / 100
+      modeled <- procData[[1]][paste0("coef.", living[4])][[1]][i] * exp(procData[[1]][paste0("exp.", living[4])][[1]][i] *
+                                                    xVals)
+      lines(x = xVals, y = modeled, lty = i)
+    }
+    legend(x = 1.1 * min(procData[[2]]$hgt, na.rm = T), y = 0.7 * max(procData[[2]]$mass, na.rm = T), 
+           legend = c(unique(procData[[1]]$plot)), pch = c(1:nrow(procData[[1]])), 
+           lty = c(1:nrow(procData[[1]])),
+           cex = 0.7,  merge = TRUE, bty = "n", 
+           title = paste0(procData[[1]]$monthYear[1], " ", living[4], " stems")
+    )
+  }
+  if (type %in% c("dead", "Dead", "DEAD", "both", "Both", "BOTH")) {
+    if (type %in% c("both", "Both", "BOTH"))  {
+      par(new = TRUE)
+      par(mar = c(4, 4, 0.3, 0.5), fig = c(0.5, 1, 0, 1))
+    } else if (!type %in% c("both", "Both", "BOTH")) {
+      par(mar = c(4, 4, 0.3, 0.5), fig = c(0, 1, 0, 1))
+    }
+    plot(procData[[2]]$mass ~ procData[[2]]$hgt,
+         ylab = "mass (g)", xlab = "height (cm)",
+         type = "n", las = 1)
+    
+    for (i in 1:nrow(procData[[1]])) {
+      points(x = procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% dying[1])], 
+             y = procData[[2]]$mass[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% dying[1])], 
+             pch = i, cex = 0.8, las = 1)
+      # predicted values
+      min.x <- min(procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% dying[1])], na.rm = T)
+      max.x <- max(procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% dying[1])], na.rm = T)
+      xVals <- c((min.x * 100):(max.x * 100)) / 100
+      modeled <- procData[[1]][paste0("coef.", dying[4])][[1]][i] * 
+                  exp(procData[[1]][paste0("exp.", dying[4])][[1]][i] * xVals)
+      lines(x = xVals, y = modeled, lty = i)
+    }
+    legend(x = 1.1 * min(procData[[2]]$hgt, na.rm = T), y = 0.7 * max(procData[[2]]$mass, na.rm = T), 
+           legend = c(unique(procData[[1]]$plot)), pch = c(1:nrow(procData[[1]])), 
+           lty = c(1:nrow(procData[[1]])),
+           cex = 0.7,  merge = TRUE, bty = "n", 
+           title = paste0(procData[[1]]$monthYear[1], " ", dying[4], " stems")
+    )
+  }
+  if (save %in% c("TRUE", "True", "true", "T")) {
+    dev.off()
+  }
+}
+
+
