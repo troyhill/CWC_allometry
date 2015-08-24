@@ -186,26 +186,13 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     }  else {
       siteName <- plotsInData[i]
     }
-
-    #     plotDate   <- paste0(siteName, i, "-", moYr)
-    x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
-    y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
-    coefs      <- coef(model <- nls(y ~ I(a * exp(b * x)), start = list(a = 0.1, b = 0.1)))
-    predicted           <- coefs[1] * exp(coefs[2] * x)
-    squared_error       <- (predicted - y)^2
     
-    # save relevant data
-#     if (combinePlots %in% countsAsTrue) {
-#       returnVals$plot[i] <- plotsInData
-#     }  else {
-#       returnVals$plot[i] <- siteName
-#     }
     if ((length(sitesInData) > 1) & (combinePlots %in% countsAsTrue)) {
       returnVals$site[i] <- paste0(sitesInData, collapse = " ")
     } else {
       returnVals$site[i] <- strsplit(as.character(unique(dataset$site)), split = c("[1-9]| "))[[i]][1] # "LUM" or "TB"
     }
-
+    
     # `plot` reports `sitesIncluded` if data are being combined across plots
     if (combinePlots %in% countsAsFalse) {
       returnVals$plot[i]  <- plotsInData[i]
@@ -214,17 +201,36 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     } else if ((combinePlots %in% countsAsTrue) & (!sitesIncluded %in% "all")) {
       returnVals$plot[i] <-  returnVals$site[i]
     }
-
-    returnVals$coef.live[i] <- coefs[1]
-    returnVals$exp.live[i]  <- coefs[2]
-    returnVals$MSE.live[i]  <- sum(squared_error, na.rm = T)
-    returnVals$r.live[i]    <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
     
+    x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
+    y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
+    
+    
+    if (length(x) < 2) {
+      returnVals$coef.live[i] <- as.numeric(NA)
+      returnVals$exp.live[i]  <- as.numeric(NA)
+      returnVals$MSE.live[i]  <- as.numeric(NA)
+      returnVals$r.live[i]    <- as.numeric(NA)
+    } else {
+      coefs      <- coef(model <- nls(y ~ I(a * exp(b * x)), start = list(a = 0.1, b = 0.1)))
+      predicted           <- coefs[1] * exp(coefs[2] * x)
+      squared_error       <- (predicted - y)^2
+      returnVals$coef.live[i] <- coefs[1]
+      returnVals$exp.live[i]  <- coefs[2]
+      returnVals$MSE.live[i]  <- sum(squared_error, na.rm = T)
+      returnVals$r.live[i]    <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
+    }
     
     # do the same for dead stems, if there's more than two stems
     if (length(dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]) > 2) {
         x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
         y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
+        if (length(x.dead) < 2) {
+          returnVals$coef.dead[i] <- as.numeric(NA)
+          returnVals$exp.dead[i]  <- as.numeric(NA)
+          returnVals$MSE.dead[i]  <- as.numeric(NA)
+          returnVals$r.dead[i]    <- as.numeric(NA)
+        } else {
         coefs.dead <- coef(model.dead <- nls(y.dead ~ I(a * exp(b * x.dead)), start = list(a = 0.1, b = 0.1)))
         
         predicted.dead      <- coefs.dead[1] * exp(coefs.dead[2] * x.dead)
@@ -235,23 +241,10 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
         returnVals$exp.dead[i]  <- coefs.dead[2]
         returnVals$MSE.dead[i]  <- sum(squared_error.dead, na.rm = T)
         returnVals$r.dead[i]    <- sqrt(1 - (deviance(model.dead)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2)))
-    } 
-    
-#     Leaving this code here until we decide whether to use R or Excel models
-# 
-#     oldParams <- read.delim(ExcelParameterFile, skip = 1)
-#     colNos <- list(c(2, 3), c(4, 5), c(6, 7))
-#     # find Excel coefficients by date matching
-#     returnVals[paste0(siteName, i, ".Excel.coef")] <- Excel.coef <- oldParams[oldParams$Month %in% moYr, colNos[[i]][1]]
-#     returnVals[paste0(siteName, i, ".Excel.exp")]  <- Excel.exp  <-oldParams[oldParams$Month %in% moYr, colNos[[i]][2]]
-#     
-#     # calculate Excel diagnostics
-#     E.predicted     <- Excel.coef * exp(Excel.exp * x)
-#     E.squared_error <- (E.predicted - y)^2
-#     returnVals[paste0(siteName, i, ".Excel.MSE")]  <- sum(E.squared_error,  na.rm = T)
-#     returnVals[paste0(siteName, i, ".Excel.corr")] <- cor(y[!is.na(y)], E.predicted[!is.na(y)])
+        } 
+    }
   }
-}
+  }
   if (returnData %in% countsAsFalse) {
     returnVals
   } else if (returnData %in% countsAsTrue) {
