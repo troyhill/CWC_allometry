@@ -1,3 +1,6 @@
+library(plyr)
+
+
 proc_CWC_files <- function (dataset, 
                            ExcelParameterFile = "C:/RDATA/SPAL_allometry/data_LUM123/data_CWC_oldCoeffs_150821.txt") {
   # function returns parameters for exponential fits (and diagnostic plots, saved to working directory)
@@ -58,6 +61,7 @@ proc_CWC_files <- function (dataset,
   }
   returnVals
 }
+
 
 getAllometryParams <- function (dataset, sitesIncluded = "all", 
                                 returnData = "FALSE", combinePlots = "FALSE") {
@@ -261,12 +265,18 @@ batch <- function (inputList, fun, ...) {
   fun <- match.fun(fun)
   for(j in 1:length(inputList)) {
     a <- fun(inputList[[j]], ...)
-    if (exists("outputObj")) {
-      outputObj <- rbind(outputObj, a)
-    } else if (!exists("outputObj")){
+    if (j != 1) {
+      if (is.list(a)) {
+        outputObj <- mapply(rbind, outputObj, a, SIMPLIFY = FALSE)
+      } else {
+        outputObj <- rbind(outputObj, a)
+      }
+    } else {
       outputObj <- a
     }
-    outputObj
+  }
+  if (is.list(a)) {
+    rownames(outputObj[[2]]) <- 1:nrow(outputObj[[2]])
   }
   outputObj
 }
