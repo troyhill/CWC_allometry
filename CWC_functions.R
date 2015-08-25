@@ -115,6 +115,7 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
   
   # homogenize inconsistent labeling
   dataset$site <- as.factor(gsub(pattern = " ", replacement = "", x = dataset$site))
+  dataset$type <- as.character(dataset$type)
   
   # find month (robust to datasets spanning multiple months)
   mo <- paste(paste(as.character(grep(paste(c(unique(substr(dataset$time, 1, 3))), collapse = "|"), month.abb))), 
@@ -158,7 +159,7 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     
   # determine how many plots are included
   siteOnly <- unlist(strsplit(as.character(dataset$site), split = c("[1-9]")))
-  sitesInData <- levels(as.factor(siteOnly)) 
+  sitesInData <- unique(siteOnly)
 
   # set number of rows in allometry parameter file
   # if all sites are selected, this step begins to combine  their data
@@ -202,8 +203,32 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
       returnVals$plot[i] <-  returnVals$site[i]
     }
     
+    ### data subset by type
     x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
     y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
+    x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
+    y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
+    
+### This didn't work, not sure why
+#     if one x-vector has length zero but the other doesn't, it means the plot was sampled and 
+#     both types should be in the data (if data is returned by function)
+#     if (returnData %in% countsAsTrue) {
+#       # if one type has data but the other doesn't insert 0s in dataset (because plot was sampled)
+#       if ((length(x) == 0) & (length(x.dead) != 0)) { 
+#         fillData <- dataset[1, ]
+#         fillData$type <- "LIVE"
+#         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
+#         fillData$hgt <- fillData$mass <- as.numeric(0)
+#         dataset <- rbind(dataset, fillData)
+#       } else if ((length(x.dead) == 0) & (length(x) != 0)) {
+#         fillData <- dataset[1, ]
+#         fillData$type <- "DEA"
+#         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
+#         fillData$hgt <- fillData$mass <- as.numeric(0)
+#         dataset <- rbind(dataset, fillData)
+#         }
+#     }
+###
     
     
     if (length(x) < 2) {
@@ -223,8 +248,6 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     
     # do the same for dead stems, if there's more than two stems
     if (length(dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]) > 2) {
-        x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
-        y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
         if (length(x.dead) < 2) {
           returnVals$coef.dead[i] <- as.numeric(NA)
           returnVals$exp.dead[i]  <- as.numeric(NA)
