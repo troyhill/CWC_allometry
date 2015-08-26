@@ -374,3 +374,168 @@ plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
 }
 
 
+
+
+PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", type = "both") {
+  # peak standing crop estimates of NAPP
+  # runs for entire dataset, reports results by year for each site
+  #   dataset = dataframe with your data
+  #   liveCol = name of the column with live biomass data
+  #   deadCol = name of the column with dead biomass data
+  #   yearCol = name of the column with year (4 digits)
+  #   siteCol = name of the column with site name
+  #   type = "PSC-A" is the traditional approach, using just live material; "PSC-B" uses live + dead material in estimates of peak standing crop
+  
+  # Usage examples: 
+  # A single site, single year
+  #   test <- smalley.prep[(smalley.prep$site %in% "LUM1") & (smalley.prep$year %in% "2014"), 1:6]
+  #   PSC(test)
+  # Single site, multiple years
+  #   test2 <- smalley.prep[(smalley.prep$site %in% "LUM1"), 1:6]
+  #   PSC(test2)
+  # Multiple sites, multiple years
+  #   test3 <- smalley.prep[, 1:6]
+  #   PSC(test3)
+  
+  ### error checking
+  if (sum(c(liveCol, deadCol, yearCol, siteCol) %in% names(dataset)) < 4) {
+    stop ("Check column names. One or more column names were not found in the dataset.")
+  }
+  if (!type %in% c("both", "PSC-A", "PSC-B")) {
+    stop ("`type` argument must be either `PSC-A`, `PSC-B`, or `both`")
+  }
+  if (length(type) > 1) {
+    stop ("`type` argument is too long. It must be of length 1.")
+  }
+  ###
+  
+  for (h in 1:length(unique(dataset[, siteCol]))) {
+    targetSite <- unique(dataset[, siteCol])[h]
+    subData1 <- dataset[dataset[, siteCol] %in% targetSite, ]
+    for (i in 1:length(unique(subData1[, yearCol]))) {
+      targetYear <- unique(subData1[, yearCol])[i]
+      subData <- subData1[subData1[, yearCol] %in% targetYear, ]
+      if (type %in% "both") {
+        PSC_A  <- max(subData[, liveCol], na.rm = T)
+        PSC_B  <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+        output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A, psc_b = PSC_B)
+      } else if (type %in% "PSC-A") {
+        PSC_A <- max(subData[, liveCol], na.rm = T)
+        output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A)
+      } else if (type %in% "PSC-B") {
+        PSC_B  <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+        output <- data.frame(site = targetSite, year = targetYear, psc_b = PSC_B)
+      }
+      
+      if (i == 1) {
+        intOutput <- output
+      } else {
+        intOutput <- rbind(intOutput, output)
+      }
+    }
+    if (h == 1) {
+      finalOutput <- intOutput
+    } else {
+      finalOutput <- rbind(finalOutput, intOutput)
+    }
+  }
+  finalOutput
+}
+
+
+
+smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", MH = "TRUE") {
+  # implements Smalley (1959) and Millner and Hughes (1968)
+  # runs for entire dataset, reports results by year for each site
+  #   dataset = dataframe with your data
+  #   liveCol = name of the column with live biomass data
+  #   deadCol = name of the column with dead biomass data
+  #   yearCol = name of the column with year (4 digits)
+  #   siteCol = name of the column with site name
+  #   MH      = if "TRUE", also implements Millner & Hughes 1968
+  #
+  # Usage examples: 
+  # Single site, single year
+  #   test <- smalley.prep[(smalley.prep$site %in% "LUM1") & (smalley.prep$year %in% "2014"), 1:6]
+  #   smalleyMethod(test)
+  # Single site, multiple years
+  #   test2 <- smalley.prep[(smalley.prep$site %in% "LUM1"), 1:6]
+  #   smalleyMethod(test2)
+  # Multiple sites, multiple years
+  #   test3 <- smalley.prep[, 1:6]
+  #   smalleyMethod(test3)
+  
+  # error checking
+  countsAsTrue  <- c("T", "TRUE", "true", "True")
+  countsAsFalse <- c("F", "FALSE", "false", "False")
+  
+  if (!MH %in% c(countsAsTrue, countsAsFalse)) {
+    stop ("`MH` argument isn't recognized. Input can be either `TRUE` or `FALSE`.")
+  }
+  if (sum(c(liveCol, deadCol, yearCol, siteCol) %in% names(dataset)) < 4) {
+    stop ("Check column names. One or more column names were not found in the dataset.")
+  }
+  
+  tempData <- dataset
+  # column names as variables:
+  smalley.inc <- "smalley.inc"
+  smalley     <- "smalley"
+  live.inc    <- "live.inc"
+  dead.inc    <- "dead.inc"
+  
+  # more variables than necessary are appended to dataset
+  tempData$smalley <- tempData$smalley.inc <- tempData$dead.inc <- tempData$live.inc <- as.numeric(NA) 
+  
+  for (h in 1:length(unique(tempData[, siteCol]))) {
+    targetSite <- unique(tempData[, siteCol])[h]
+    subData1 <- tempData[tempData[, siteCol] %in% targetSite, ]
+    # calculates biomass increments (Bn - B(n-1)) over all available years
+    for (j in 2:(nrow(subData1))) {
+      # live biomassincrements
+      subData1[, live.inc][j] <- subData1[, liveCol][j] - subData1[, liveCol][j - 1]
+      # dead biomass increments
+      subData1[, dead.inc][j] <- subData1[, deadCol][j] - subData1[, deadCol][j - 1]
+      
+      # apply decision rules
+        # both increments positive: sum of both
+        # both negative: zero
+        # live + and dead -: use live
+        # live - and dead +: difference (if positive, otherwise use zero)
+      if ((subData1[, live.inc][j] > 0) & (subData1[, dead.inc][j] > 0)) {
+        newVal <- subData1[, live.inc][j] + subData1[, dead.inc][j]
+      } else if ((subData1[, live.inc][j] <= 0) & (subData1[, dead.inc][j] <= 0)) {
+        newVal <- 0
+      } else if ((subData1[, live.inc][j] > 0) & (subData1[, dead.inc][j] <= 0)) {
+        newVal <- subData1[, live.inc][j] 
+      } else if ((subData1[, live.inc][j] <= 0) & (subData1[, dead.inc][j] > 0)) {
+        calc <- subData1[, live.inc][j] + subData1[, dead.inc][j]
+        if (calc < 0) {
+          newVal <- 0
+        } else {
+          newVal <- calc
+        }
+      }
+      # write values to output dataframe
+      tempData[tempData[, siteCol] %in% targetSite, live.inc][j]    <- subData1[, live.inc][j]
+      tempData[tempData[, siteCol] %in% targetSite, dead.inc][j]    <- subData1[, dead.inc][j]
+      tempData[tempData[, siteCol] %in% targetSite, smalley.inc][j] <- newVal
+    }
+#   }
+      
+  # now, calculate NAPP cumulatively for each year
+  # treat NAs as zeroes in NAPP calculation
+  for (k in 1:length(unique(subData1[, yearCol]))) {
+    targetYear <- unique(subData1[, yearCol])[k]
+    subData2   <- tempData[(tempData[, yearCol] %in% targetYear) & (tempData[, siteCol] %in% targetSite), ]
+    
+    # sum smalley increments
+    subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
+    # add to output dataframe
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley] <- subData2[, smalley]
+    }
+  }
+  tempData
+}
+
+
+
