@@ -71,10 +71,10 @@ CWC.plots <- ddply(cwc, .(site, time, type, marsh), summarise,
                    lngth.top3    =  mean(sort(hgt, decreasing = TRUE)[1:3], na.rm = T),
                    lngth.median =  median(hgt, na.rm = T)
                    )
-
-nrow(CWC.plots) # 207
+CWC.plots$year <- substr(as.character(CWC.plots$time), 5, 9)
 
 ### make sure that an absence of biomass has not been interpreted as an absence of sampling
+nrow(CWC.plots) # 207
 for (i in 1:length(unique(CWC.plots$site))) {
   for (j in 1:length(unique(CWC.plots$time))) {
     plot    <- unique(CWC.plots$site)[i]
@@ -117,6 +117,7 @@ plot.totals <- ddply(CWC.plots, .(site, time, marsh), summarise,
                      biomass.all = sum(mass, na.rm = T),
                      stems.all   = sum(stems, na.rm = T)
 )
+plot.totals$year <- substr(as.character(plot.totals$time), 5, 9)
 
 ### mean, se by site
 site.tot <- ddply(plot.totals, .(marsh, time), summarise,
@@ -126,10 +127,23 @@ site.tot <- ddply(plot.totals, .(marsh, time), summarise,
                   stems.se   = se(stems.all)                
 )
 
+
+napp <- ddply(CWC.plots, .(marsh, site, time, year), summarise,
+              live = mass[type %in% "LIVE"],
+              dead = mass[type %in% "DEAD"],
+              stems.l = stems[type %in% "LIVE"],
+              stems.d = stems[type %in% "DEAD"],
+              lgth.live = lngth.top3[type %in% "LIVE"],
+              lgth.dead = lngth.top3[type %in% "DEAD"]
+)
+head(napp)
+
+
+
 #####
 
 
-##### plot data
+##### Exploratory plots
 #####
 
 # our custom function condenses these four lines of code to a single, brief line: 
@@ -195,8 +209,7 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
 
 ##### Compare standing crop estimates
 #####
-### 1) peak standing crop (max standing biomass (PSC-A: live and PSC-B: live + dead); Linthurst and Reimold 1978 use only live - there seems to be some inconsistency
-###  in this aspect of the method)
+### 1) peak standing crop (max standing biomass (PSC-A: live and PSC-B: live + dead); Linthurst and Reimold 1978 use only live
 ### 2) Smalley 1959: measure live and dead over time (both +: sum both; 
 #                                                   both -: 0; 
 #                                                   live + and dead -: live; 
@@ -214,14 +227,23 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
 #  e shouldn't be negative because assumption is that only live biomass contributes to standing dead material. If that happens, set e to zero
 #  if (e < 0) e <- 0
 
-### peak biomass
+
+napp2 <- nappCalc(napp)
+
+
+### summarize napp estimates (peaks and peak timing)
+
+# means by plot:
+ddply(napp2, .(site, marsh, year), summarise # numcolwise()
+      smaller = max(smalley, na.rm = T),
+      MH = max(Mill),
+      t.max = time[biomass.all == max(biomass.all)],
+      t.min = time[biomass.all == min(biomass.all)]
+)
 
 
 
 ### Peak standing crop method
-# set year in site.tot
-plot.totals$year <- substr(as.character(plot.totals$time), 5, 9)
-
 # peak timing isn't uniform within sites; preserved in psc.prep
 # how best to represent timing?
 psc.prep <- ddply(plot.totals, .(site, marsh, year), summarise,
@@ -245,88 +267,13 @@ ggplot(aes(x = year, y = peak, fill = factor(marsh)), data = psc) +
   geom_errorbar(aes(ymin = peak - peak.se, ymax = peak + peak.se), width = 0, position = position_dodge(width=0.9)) +
   labs(y = expression("Peak standing crop (g "%.%~m^-2%.%~yr^-1*")"), x = "")
 # ggsave(file = "C:/RDATA/SPAL_allometry/PeakStandingCrop.png", width = wdh, height = hgt, units = "in")
-# wish we had elevations!!!
-
-### Smalley: measure live and dead over time (both +: include both; both -: 0; live +
-###   and dead -: live; live - and dead +: use sum)
-
-# prepare to calculate increments for live & dead
-CWC.plots$year <- substr(as.character(CWC.plots$time), 5, 9)
-smalley.prep <- ddply(CWC.plots, .(marsh, site, time, year), summarise,
-                 live = mass[type %in% "LIVE"],
-                 dead = mass[type %in% "DEAD"]
-        )
-head(smalley.prep)
-
-# calculate increments
-smalley.prep$dead.inc <- smalley.prep$live.inc <- as.numeric(NA)  
-for (i in 1:length(unique(smalley.prep$site))) {
-  subData <- smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], ]
-  for (j in 2:(nrow(subData))) {
-    smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "live.inc"][j] <- 
-      smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "live"][j] - 
-      smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "live"][j - 1]
-    smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "dead.inc"][j] <- 
-      smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "dead"][j] - 
-      smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "dead"][j - 1]
-  }
-}
-
-# decision rules determine biomass
-# do this per year? or continuously?
-smalley.prep$napp <- smalley.prep$napp.inc <- NA
-for (i in 1:length(unique(smalley.prep$site))) {
-  subData <- smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], ]
-  for (j in 2:(nrow(subData))) {
-     if ((subData$live.inc[j] > 0) & (subData$dead.inc[j] > 0)) {
-       smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "napp.inc"][j] <- 
-         subData$live.inc[j] + subData$dead.inc[j]
-     } else if ((subData$live.inc[j] <= 0) & (subData$dead.inc[j] <= 0)) {
-       smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "napp.inc"][j] <- 0
-     } else if ((subData$live.inc[j] > 0) & (subData$dead.inc[j] <= 0)) {
-       smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "napp.inc"][j] <- subData$live.inc[j] 
-     } else if ((subData$live.inc[j] <= 0) & (subData$dead.inc[j] > 0)) {
-       calc <- subData$live.inc[j] + subData$dead.inc[j]
-       if (calc < 0) {
-         smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "napp.inc"][j] <- 0
-       } else {
-       smalley.prep[smalley.prep$site %in% unique(smalley.prep$site)[i], "napp.inc"][j] <- 
-         calc
-       }
-     }
-  }
-  # calculate NAPP cumulatively for each year
-  # treat NAs as zeroes in NAPP calculation
-  for (k in 1:length(unique(subData$year))) {
-    smalley.prep[(smalley.prep$site %in% unique(smalley.prep$site)[i]) & 
-                   (smalley.prep$year %in% unique(subData$year)[k]), "napp"][!is.na(
-                     smalley.prep[(smalley.prep$site %in% unique(smalley.prep$site)[i]) & 
-                                    (smalley.prep$year %in% unique(subData$year)[k]), "napp.inc"]
-                   )] <- 
-      cumsum(smalley.prep[(smalley.prep$site %in% unique(smalley.prep$site)[i]) & 
-                            (smalley.prep$year %in% unique(subData$year)[k]), "napp.inc"][!is.na(
-                              smalley.prep[(smalley.prep$site %in% unique(smalley.prep$site)[i]) & 
-                                             (smalley.prep$year %in% unique(subData$year)[k]), "napp.inc"]
-                            )])
-  }
-}
-
-
-
-
-
-
-
+# wish we had plot elevations!
 
 
 
 
 #####
-
-
-
-
-##### Compare allometry between TB and LUM
+##### 
+#####
 #####
 
-#####

@@ -447,7 +447,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
                           MH = "TRUE", summarize = "FALSE", timeCol = "time") {
-  # implements Smalley (1959) and Millner and Hughes (1968)
+  # implements Smalley (1959) and Milner and Hughes (1968)
   # runs for entire dataset, reports results by year for each site
   #   dataset = dataframe with your data
   #   liveCol = name of the column with live biomass data
@@ -490,7 +490,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   smalley     <- "smalley"
   live.inc    <- "live.inc" # VTS1975's delL
   dead.inc    <- "dead.inc" # VTS1975's delD
-  MH          <- "MillnerHughes"
+  MH          <- "MilnerHughes"
   # Valiela, Teal, Sass 1975
   eV          <- "VTS1975.inc"
   VTS         <- "VTS1975"
