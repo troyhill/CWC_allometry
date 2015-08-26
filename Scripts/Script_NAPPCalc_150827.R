@@ -234,12 +234,28 @@ napp2 <- nappCalc(napp)
 ### summarize napp estimates (peaks and peak timing)
 
 # means by plot:
-ddply(napp2, .(site, marsh, year), summarise # numcolwise()
-      smaller = max(smalley, na.rm = T),
-      MH = max(Mill),
-      t.max = time[biomass.all == max(biomass.all)],
-      t.min = time[biomass.all == min(biomass.all)]
+ddply(napp2[napp$marsh %in% "LUM", ], .(site, marsh, year), summarise, # numcolwise()
+      # NAPP estimates (g/m2/yr)
+      smalley = max(smalley, na.rm = T),
+      MH      = max(MilnerHughes, na.rm = T),
+      vts     = max(VTS1975, na.rm = T),
+      psc.a   = max(psc.live, na.rm = T),
+      psc.b   = max(psc.tot, na.rm = T),
+      
+      # peak timing
+      t.smalley = time[smalley      == max(smalley, na.rm = T)],
+      t.MH      = time[MilnerHughes == max(MilnerHughes, na.rm = T)],
+      t.vts     = time[VTS1975      == max(VTS1975, na.rm = T)],
+      t.psc.a   = time[psc.live     == max(psc.live, na.rm = T)],
+      t.psc.b   = time[psc.tot      == max(psc.tot, na.rm = T)]
 )
+
+lum <- napp2[napp$marsh %in% "LUM", ]
+
+napp2$siteTime <- paste(napp2$site, napp2$time)
+
+for (i in 1:)
+
 
 
 
