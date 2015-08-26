@@ -468,8 +468,9 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
   # Multiple sites, multiple years
   #   test3 <- smalley.prep[, 1:6]
   #   smalleyMethod(test3)
+  #   smalleyMethod(test3, summarize = "TRUE")[[2]]
   
-  # error checking
+  ### error checking
   countsAsTrue  <- c("T", "TRUE", "true", "True")
   countsAsFalse <- c("F", "FALSE", "false", "False")
   
@@ -479,27 +480,46 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
   if (sum(c(liveCol, deadCol, yearCol, siteCol) %in% names(dataset)) < 4) {
     stop ("Check column names. One or more column names were not found in the dataset.")
   }
+  ###
   
   tempData <- dataset
   # column names as variables:
   smalley.inc <- "smalley.inc"
   smalley     <- "smalley"
-  live.inc    <- "live.inc"
-  dead.inc    <- "dead.inc"
+  live.inc    <- "live.inc" # VTS1975's delL
+  dead.inc    <- "dead.inc" # VTS1975's delD
   MH          <- "MillnerHughes"
+  # Valiela, Teal, Sass 1975
+  eV          <- "VTS1975.inc"
+  VTS         <- "VTS1975"
+  
   
   # more variables than necessary are appended to dataset
-  tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
+  tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
+    tempData[, eV] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
   
   for (h in 1:length(unique(tempData[, siteCol]))) {
     targetSite <- unique(tempData[, siteCol])[h]
     subData1 <- tempData[tempData[, siteCol] %in% targetSite, ]
     # calculates biomass increments (Bn - B(n-1)) over all available years
     for (j in 2:(nrow(subData1))) {
-      # live biomassincrements
+      # live biomass increments
       subData1[, live.inc][j] <- subData1[, liveCol][j] - subData1[, liveCol][j - 1]
       # dead biomass increments
       subData1[, dead.inc][j] <- subData1[, deadCol][j] - subData1[, deadCol][j - 1]
+      
+      # calculate e from Valiela, Teal, Sass 1975
+      if ((subData1[, live.inc][j] >= 0) & (subData1[, dead.inc][j] < 0)) {
+        subData1[, eV][j] <- -subData1[, dead.inc][j]
+      } else if (subData1[, live.inc][j] < 0) {
+        subData1[, eV][j] <- -(subData1[, dead.inc][j] + subData1[, live.inc][j])
+      }
+      # change e to zero, if negative
+      if (!is.na(subData1[, eV][j])) {
+        if (subData1[, eV][j] < 0 ) {
+          subData1[, eV][j] <- 0
+        }
+      }
       
       # apply decision rules
         # both increments positive: sum of both
@@ -523,9 +543,9 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
       # write values to output dataframe
       tempData[tempData[, siteCol] %in% targetSite, live.inc][j]    <- subData1[, live.inc][j]
       tempData[tempData[, siteCol] %in% targetSite, dead.inc][j]    <- subData1[, dead.inc][j]
+      tempData[tempData[, siteCol] %in% targetSite, eV][j]          <- subData1[, eV][j]
       tempData[tempData[, siteCol] %in% targetSite, smalley.inc][j] <- newVal
     }
-#   }
       
   # now, calculate NAPP cumulatively for each year
   # treat NAs as zeroes in NAPP calculation
@@ -535,14 +555,21 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
     
     # sum smalley increments
     subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
+    
     # sum live biomass increments for Millner & Hughes 1968
     temp <- subData2[, live.inc][subData2[, live.inc] > 0][!is.na(subData2[, live.inc][subData2[, live.inc] > 0])]
     # this line could be problematic if two live biomass increments are identical in a single year
     subData2[which(subData2[, live.inc] %in% temp), MH] <- cumsum(temp[!is.na(temp)])
     
+    # sum e from Valiela, Teal, Sass 1975
+    subData2[, VTS][!is.na(subData2[, eV])] <- cumsum(subData2[, eV][!is.na(subData2[, eV])])
+      
+      
+    
     # add to output dataframe
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley] <- subData2[, smalley]
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]      <- subData2[, MH]
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley]  <- subData2[, smalley]
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]       <- subData2[, MH]
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
     }
   }
   
@@ -552,7 +579,8 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
     # this is a weak point; I'm not positive this will work if column names differ
     summaryStats <- ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
                           napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
-                          napp.MH        = max(eval(parse(text = MH)), na.rm = T)
+                          napp.MH        = max(eval(parse(text = MH)), na.rm = T),
+                          napp.VTS       = max(eval(parse(text = VTS)), na.rm = T)
                           # Couldn't get the peak timing for smalley to work...
                           #  ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
                           #         napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
