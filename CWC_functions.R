@@ -446,13 +446,14 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", MH = "TRUE") {
   # implements Smalley (1959) and Millner and Hughes (1968)
+  # note: function returns values for each increment; not max values by year (which could also be very useful)
   # runs for entire dataset, reports results by year for each site
   #   dataset = dataframe with your data
   #   liveCol = name of the column with live biomass data
   #   deadCol = name of the column with dead biomass data
   #   yearCol = name of the column with year (4 digits)
   #   siteCol = name of the column with site name
-  #   MH      = if "TRUE", also implements Millner & Hughes 1968
+  #   MH      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
   #
   # Usage examples: 
   # Single site, single year
@@ -482,9 +483,10 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
   smalley     <- "smalley"
   live.inc    <- "live.inc"
   dead.inc    <- "dead.inc"
+  MH          <- "MillnerHughes"
   
   # more variables than necessary are appended to dataset
-  tempData$smalley <- tempData$smalley.inc <- tempData$dead.inc <- tempData$live.inc <- as.numeric(NA) 
+  tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
   
   for (h in 1:length(unique(tempData[, siteCol]))) {
     targetSite <- unique(tempData[, siteCol])[h]
@@ -530,8 +532,14 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
     
     # sum smalley increments
     subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
+    # sum live biomass increments for Millner & Hughes 1968
+    temp <- subData2[, live.inc][subData2[, live.inc] > 0][!is.na(subData2[, live.inc][subData2[, live.inc] > 0])]
+    # this line could be problematic if two live biomass increments are identical in a single year
+    subData2[which(subData2[, live.inc] %in% temp), MH] <- cumsum(temp[!is.na(temp)])
+    
     # add to output dataframe
     tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley] <- subData2[, smalley]
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]      <- subData2[, MH]
     }
   }
   tempData
