@@ -445,7 +445,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 
 
-smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
+nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
                           MH = "TRUE", summarize = "FALSE", timeCol = "time") {
   # implements Smalley (1959) and Millner and Hughes (1968)
   # runs for entire dataset, reports results by year for each site
@@ -459,16 +459,18 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
   #   summarize = if "TRUE", summary statistics (max NAPP estimates) are reported. TODO: report peak timing
   #
   # Usage examples: 
-  # Single site, single year
+  # # Single site, single year
   #   test <- smalley.prep[(smalley.prep$site %in% "LUM1") & (smalley.prep$year %in% "2014"), 1:6]
-  #   smalleyMethod(test)
-  # Single site, multiple years
+  #   nappCalc(test)
+  # # Single site, multiple years
   #   test2 <- smalley.prep[(smalley.prep$site %in% "LUM1"), 1:6]
-  #   smalleyMethod(test2)
-  # Multiple sites, multiple years
+  #   nappCalc(test2)
+  # # Multiple sites, multiple years
   #   test3 <- smalley.prep[, 1:6]
-  #   smalleyMethod(test3)
-  #   smalleyMethod(test3, summarize = "TRUE")[[2]]
+  #   nappCalc(test3)
+  #   nappCalc(test3, summarize = "TRUE")[[2]]
+  # # Last two columns are identical to 
+  #   PSC(smalley.prep[, 1:6])
   
   ### error checking
   countsAsTrue  <- c("T", "TRUE", "true", "True")
@@ -492,10 +494,12 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
   # Valiela, Teal, Sass 1975
   eV          <- "VTS1975.inc"
   VTS         <- "VTS1975"
+  PSC_A       <- "psc.live"
+  PSC_B       <- "psc.tot"
   
   
   # more variables than necessary are appended to dataset
-  tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
+  tempData[, PSC_A] <- tempData[, PSC_B] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
     tempData[, eV] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
   
   for (h in 1:length(unique(tempData[, siteCol]))) {
@@ -551,6 +555,7 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
   # treat NAs as zeroes in NAPP calculation
   for (k in 1:length(unique(subData1[, yearCol]))) {
     targetYear <- unique(subData1[, yearCol])[k]
+    # data for a single site, single year
     subData2   <- tempData[(tempData[, yearCol] %in% targetYear) & (tempData[, siteCol] %in% targetSite), ]
     
     # sum smalley increments
@@ -564,12 +569,17 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
     # sum e from Valiela, Teal, Sass 1975
     subData2[, VTS][!is.na(subData2[, eV])] <- cumsum(subData2[, eV][!is.na(subData2[, eV])])
       
-      
+    # sum peak standing crop increments
+    subData2[, PSC_A][!is.na(subData2[, liveCol])]                       <- cummax(subData2[, liveCol][!is.na(subData2[, liveCol])])
+    subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- cummax(c(subData2[, liveCol] + subData2[, deadCol])[!is.na(c(subData2[, liveCol] + subData2[, deadCol]))])
+    
     
     # add to output dataframe
     tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley]  <- subData2[, smalley]
     tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]       <- subData2[, MH]
     tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_A]    <- subData2[, PSC_A]
+    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_B]    <- subData2[, PSC_B]
     }
   }
   
@@ -580,7 +590,10 @@ smalleyMethod <- function(dataset, liveCol = "live", deadCol = "dead", yearCol =
     summaryStats <- ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
                           napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
                           napp.MH        = max(eval(parse(text = MH)), na.rm = T),
-                          napp.VTS       = max(eval(parse(text = VTS)), na.rm = T)
+                          napp.VTS       = max(eval(parse(text = VTS)), na.rm = T),
+                          napp.psc.a     = max(eval(parse(text = PSC_A)), na.rm = T),
+                          napp.psc.b     = max(eval(parse(text = PSC_B)), na.rm = T)
+                          
                           # Couldn't get the peak timing for smalley to work...
                           #  ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
                           #         napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
