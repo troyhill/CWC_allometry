@@ -460,17 +460,18 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   #
   # Usage examples: 
   # # Single site, single year
-  #   test <- smalley.prep[(smalley.prep$site %in% "LUM1") & (smalley.prep$year %in% "2014"), 1:6]
+  #   test <- napp[(napp$site %in% "LUM1") & (napp$year %in% "2014"), 1:6]
   #   nappCalc(test)
   # # Single site, multiple years
-  #   test2 <- smalley.prep[(smalley.prep$site %in% "LUM1"), 1:6]
-  #   nappCalc(test2)
+  #   test2 <- napp[(napp$site %in% "LUM1"), 1:6]
+  #   nappCalc(test2, summarize = "TRUE")[[2]]
   # # Multiple sites, multiple years
-  #   test3 <- smalley.prep[, 1:6]
+  #   test3 <- napp[, 1:6]
   #   nappCalc(test3)
   #   nappCalc(test3, summarize = "TRUE")[[2]]
+  #   nappCalc(test3, summarize = "TRUE")[[2]]
   # # Last two columns are identical to 
-  #   PSC(smalley.prep[, 1:6])
+  #   PSC(napp[, 1:6])
   
   ### error checking
   countsAsTrue  <- c("T", "TRUE", "true", "True")
@@ -499,7 +500,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   
   
   # more variables than necessary are appended to dataset
-  tempData[, PSC_A] <- tempData[, PSC_B] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
+  tempData[, PSC_B] <- tempData[, PSC_A] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
     tempData[, eV] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
   
   for (h in 1:length(unique(tempData[, siteCol]))) {
@@ -587,13 +588,18 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
     output <- tempData
   } else if (summarize %in% countsAsTrue) {
     # this is a weak point; I'm not positive this will work if column names differ
-    summaryStats <- ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
+    suppressWarnings(summaryStats <- ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
                           napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
                           napp.MH        = max(eval(parse(text = MH)), na.rm = T),
                           napp.VTS       = max(eval(parse(text = VTS)), na.rm = T),
                           napp.psc.a     = max(eval(parse(text = PSC_A)), na.rm = T),
-                          napp.psc.b     = max(eval(parse(text = PSC_B)), na.rm = T)
+                          napp.psc.b     = max(eval(parse(text = PSC_B)), na.rm = T),
                           
+                          t.smalley = as.character(NA),
+                          t.MH      = as.character(NA),
+                          t.vts     = as.character(NA),
+                          t.psc.a   = as.character(NA),
+                          t.psc.b   = as.character(NA)
                           # Couldn't get the peak timing for smalley to work...
                           #  ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
                           #         napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
@@ -603,8 +609,29 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
                           #         )
                           # na.omit(tempData[tempData[, MH] == max(tempData[, MH], na.rm = T), timeCol])[1]
                           # na.omit(tempData[tempData[, smalley] == max(tempData[, smalley], na.rm = T), timeCol])[1] # works
-    )
+    ))
     names(summaryStats)[1:2] <- c( "site", "year")
+    
+    tempData_siteTime     <- paste(tempData[, siteCol], tempData[, yearCol])
+    summaryStats_siteTime <- paste(summaryStats$site, summaryStats$year)
+    
+    colVec    <- grep(smalley, names(tempData))[2]
+    colVec2   <- grep(PSC_B, names(tempData))
+    
+    # should make this an internal operation in nappCalc
+    for (i in 1:length(unique(tempData_siteTime))) {
+      targetSite <- unique(tempData_siteTime)[i]
+      subData    <- tempData[tempData_siteTime %in% targetSite, ] # cols 15:19 are NAPP estimates, 
+      start <- grep("t.smalley" , names(summaryStats))
+      for (j in colVec:colVec2) {
+        suppressWarnings(
+        if (is.finite(max(subData[, j], na.rm = T))) {
+          summaryStats[summaryStats_siteTime %in% targetSite, (start + j - colVec)] <- as.character(subData$time[which.max(subData[, j])])
+        }
+        )
+      }
+    }
+    
     
 #     # get timing manually
 #     # includes multiple times per year

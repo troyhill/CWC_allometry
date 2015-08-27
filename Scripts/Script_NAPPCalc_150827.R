@@ -17,6 +17,7 @@
 #####
 library(ggplot2)
 library(reshape2)
+library(plyr)
 # 'cwc' object has compiled raw allometry data
 # source("C:/RDATA/SPAL_allometry/Script_mergeData_150824.R")
 # or read.csv("C:/RDATA/SPAL_allometry/[csv file with CWC data]")
@@ -228,35 +229,7 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
 #  if (e < 0) e <- 0
 
 
-napp2 <- nappCalc(napp)
-
-
-### summarize napp estimates (peaks and peak timing)
-
-# means by plot:
-ddply(napp2[napp$marsh %in% "LUM", ], .(site, marsh, year), summarise, # numcolwise()
-      # NAPP estimates (g/m2/yr)
-      smalley = max(smalley, na.rm = T),
-      MH      = max(MilnerHughes, na.rm = T),
-      vts     = max(VTS1975, na.rm = T),
-      psc.a   = max(psc.live, na.rm = T),
-      psc.b   = max(psc.tot, na.rm = T),
-      
-      # peak timing
-      t.smalley = time[smalley      == max(smalley, na.rm = T)],
-      t.MH      = time[MilnerHughes == max(MilnerHughes, na.rm = T)],
-      t.vts     = time[VTS1975      == max(VTS1975, na.rm = T)],
-      t.psc.a   = time[psc.live     == max(psc.live, na.rm = T)],
-      t.psc.b   = time[psc.tot      == max(psc.tot, na.rm = T)]
-)
-
-lum <- napp2[napp$marsh %in% "LUM", ]
-
-napp2$siteTime <- paste(napp2$site, napp2$time)
-
-for (i in 1:)
-
-
+napp2 <- nappCalc(napp, summarize = "TRUE")
 
 
 ### Peak standing crop method
@@ -276,14 +249,12 @@ psc <- ddply(psc.prep, .(marsh, year), summarise,
              t.low  = mean(t.min)
              )
 
-ggplot(psc, aes(x = year, y = max, colour = marsh)) + geom_bar(stat = "identity") +
-  theme_bw()
 ggplot(aes(x = year, y = peak, fill = factor(marsh)), data = psc) + 
   theme_bw() + theme(legend.title = element_blank()) + geom_bar(stat = "identity", position = position_dodge(width=0.9)) +
   geom_errorbar(aes(ymin = peak - peak.se, ymax = peak + peak.se), width = 0, position = position_dodge(width=0.9)) +
   labs(y = expression("Peak standing crop (g "%.%~m^-2%.%~yr^-1*")"), x = "")
 # ggsave(file = "C:/RDATA/SPAL_allometry/PeakStandingCrop.png", width = wdh, height = hgt, units = "in")
-# wish we had plot elevations!
+# elevations?
 
 
 
