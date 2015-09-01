@@ -113,7 +113,7 @@ cwc$type <- as.character(cwc$type)
 #####
 months <- unique(data13$time)
 for (i in 1:length(months)) {
-  sub <- data13[data13$time %in% mos[i], c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")]
+  sub <- data13[data13$time %in% months[i], c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")]
   params2013_temp <- getAllometryParams(dataset = sub)
   if (i != 1) {
     params2013 <- rbind(params2013, params2013_temp)
