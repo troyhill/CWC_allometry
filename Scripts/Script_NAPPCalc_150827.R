@@ -40,7 +40,19 @@ panel_plot1 <- function(y, x = "time", ylab = "") {
 labeli <- function(variable, value){
   value <- droplevels(value)
   names_li <- list("biomass" = "Biomass (g m-2)", "stemDensity" = "Stem density (m-2)",
-                   "length.top3" = "Longest stems (cm)", "stems" = "Stem density (m-2)")
+                   "length.top3" = "Longest stems (cm)", "stems" = "Stem density (m-2)"
+                   )
+  return(names_li[value])
+}
+
+nappLabelConv <- function(variable, value){
+  value <- droplevels(value)
+  names_li <- list(
+                   "smalley" = "Smalley 1959", "MH" = "Millner Hughes 1968", 
+                   "VTS" = "Valiela et al. 1975", 
+                   "psc.live" = "Peak (live)",
+                   "psc.tot" = "Peak (live + dead)"
+  )
   return(names_li[value])
 }
 
@@ -261,11 +273,12 @@ m.napp.se  <- melt(dd.napp.se, id.vars = c("marsh", "year"))
 m.napp$value.se  <- m.napp.se$value
 
 
+# Compare sites across different methods
 ggplot(m.napp, aes(x = year, y = value, col = marsh)) + geom_point() + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
-  facet_grid(variable ~ ., scale = "fixed") + ylim(0, 3000) + labs(x = "", y = "") + 
+  facet_grid(variable ~ ., scale = "fixed", labeller = nappLabelConv) + ylim(0, 3000) + labs(x = "", y = expression("NAPP (g "%.%m^-2~")")) + 
   theme_bw() + theme(legend.title = element_blank())
-
+# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare.png", width = 7, height= 7, units = "in", dpi = 300)
 
 
 #####
