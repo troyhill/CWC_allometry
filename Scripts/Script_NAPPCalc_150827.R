@@ -232,40 +232,7 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
 
 napp2 <- nappCalc(napp, summarize = "TRUE")
 
-summaryStats <- ddply(napp2[, c(1,2, 4, 15:ncol(napp2))], .(site, year), summarise,
-                          napp.smalley   = max(smalley, na.rm = T),
-                          napp.MH        = max(MH, na.rm = T),
-                          napp.VTS       = max(VTS1975, na.rm = T),
-                          napp.psc.a     = max(psc.live, na.rm = T),
-                          napp.psc.b     = max(psc.tot, na.rm = T),
-                          
-                          t.smalley = as.character(NA),
-                          t.MH      = as.character(NA),
-                          t.vts     = as.character(NA),
-                          t.psc.a   = as.character(NA),
-                          t.psc.b   = as.character(NA)
-                          )
-
-### find peak timing
-    napp2_siteTime     <- paste(napp2[, "site"], napp2[, "year"])
-    summaryStats_siteTime <- paste(summaryStats$site, summaryStats$year)
-    
-    colVec    <- grep("smalley", names(napp2))[2]
-    colVec2   <- grep("psc.tot", names(napp2))
-    
-
-    for (i in 1:length(unique(napp2_siteTime))) {
-      targetSite <- unique(napp2_siteTime)[i]
-      subData    <- napp2[napp2_siteTime %in% targetSite, ]
-      start <- grep("t.smalley" , names(summaryStats))
-      for (j in colVec:colVec2) {
-        suppressWarnings(
-        if (is.finite(max(subData[, j], na.rm = T))) {
-          summaryStats[summaryStats_siteTime %in% targetSite, (start + j - colVec)] <- as.character(subData$time[which.max(subData[, j])])
-        }
-        )
-      }
-    }
+napp2$summary
 
 
 
