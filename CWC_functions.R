@@ -610,7 +610,9 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
         t.psc.b      = as.character(subData2[, timeCol][which.max(subData2[, PSC_B])])
         )
         
-        if (i != 1) {
+        if (i != 1 ) {
+          finalData <- rbind(finalData, intData)
+        } else if ((i == 1) & (j != 1)) {
           finalData <- rbind(finalData, intData)
         } else {
           finalData <- intData

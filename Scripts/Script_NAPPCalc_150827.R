@@ -234,32 +234,8 @@ napp2 <- nappCalc(napp, summarize = "TRUE")
 
 napp2$summary
 
-
-
-### Peak standing crop method
-# peak timing isn't uniform within sites; preserved in psc.prep
-# how best to represent timing?
-psc.prep <- ddply(plot.totals, .(site, marsh, year), summarise,
-             max = max(biomass.all),
-             min = min(biomass.all),
-             t.max = time[biomass.all == max(biomass.all)],
-             t.min = time[biomass.all == min(biomass.all)]
-             )
-psc <- ddply(psc.prep, .(marsh, year), summarise,
-             peak   = mean(max),
-             low    = mean(min),
-             peak.se = se(max), 
-             t.peak = mean(t.max),
-             t.low  = mean(t.min)
-             )
-
-ggplot(aes(x = year, y = peak, fill = factor(marsh)), data = psc) + 
-  theme_bw() + theme(legend.title = element_blank()) + geom_bar(stat = "identity", position = position_dodge(width=0.9)) +
-  geom_errorbar(aes(ymin = peak - peak.se, ymax = peak + peak.se), width = 0, position = position_dodge(width=0.9)) +
-  labs(y = expression("Peak standing crop (g "%.%~m^-2%.%~yr^-1*")"), x = "")
-# ggsave(file = "C:/RDATA/SPAL_allometry/PeakStandingCrop.png", width = wdh, height = hgt, units = "in")
-# elevations?
-
+# compare with separate peak standing crop method
+PSC(napp)
 
 
 
