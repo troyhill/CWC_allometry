@@ -446,7 +446,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
-                          MH = "TRUE", summarize = "FALSE", timeCol = "time") {
+                          MilnerHughes = "TRUE", summarize = "FALSE", timeCol = "time") {
   # implements Smalley (1959) and Milner and Hughes (1968)
   # runs for entire dataset, reports results by year for each site
   #   dataset = dataframe with your data
@@ -455,7 +455,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   #   yearCol = name of the column with year (4 digits)
   #   siteCol = name of the column with site name
   #   timeCol = column with time data (in form "%B %Y"). This only matters for the summary statistics, which report peak timing
-  #   MH      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
+  #   MilnerHughes      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
   #   summarize = if "TRUE", summary statistics (max NAPP estimates) are reported. TODO: report peak timing
   #
   # Usage examples: 
@@ -477,21 +477,21 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   countsAsTrue  <- c("T", "TRUE", "true", "True")
   countsAsFalse <- c("F", "FALSE", "false", "False")
   
-  if (!MH %in% c(countsAsTrue, countsAsFalse)) {
-    stop ("`MH` argument isn't recognized. Input can be either `TRUE` or `FALSE`.")
+  if (!MilnerHughes %in% c(countsAsTrue, countsAsFalse)) {
+    stop ("`MilnerHughes` argument isn't recognized. Input can be either `TRUE` or `FALSE`.")
   }
   if (sum(c(liveCol, deadCol, yearCol, siteCol) %in% names(dataset)) < 4) {
     stop ("Check column names. One or more column names were not found in the dataset.")
   }
   ###
   
-  tempData <- dataset
+  tempData    <- dataset
   # column names as variables:
   smalley.inc <- "smalley.inc"
   smalley     <- "smalley"
   live.inc    <- "live.inc" # VTS1975's delL
   dead.inc    <- "dead.inc" # VTS1975's delD
-  MH          <- "MilnerHughes"
+  MH          <- "MH"
   # Valiela, Teal, Sass 1975
   eV          <- "VTS1975.inc"
   VTS         <- "VTS1975"
@@ -587,72 +587,38 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   if (summarize %in% countsAsFalse) {
     output <- tempData
   } else if (summarize %in% countsAsTrue) {
-    # this is a weak point; I'm not positive this will work if column names differ
-    suppressWarnings(summaryStats <- ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
-                          napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
-                          napp.MH        = max(eval(parse(text = MH)), na.rm = T),
-                          napp.VTS       = max(eval(parse(text = VTS)), na.rm = T),
-                          napp.psc.a     = max(eval(parse(text = PSC_A)), na.rm = T),
-                          napp.psc.b     = max(eval(parse(text = PSC_B)), na.rm = T),
-                          
-                          t.smalley = as.character(NA),
-                          t.MH      = as.character(NA),
-                          t.vts     = as.character(NA),
-                          t.psc.a   = as.character(NA),
-                          t.psc.b   = as.character(NA)
-                          # Couldn't get the peak timing for smalley to work...
-                          #  ddply(tempData, .(eval(parse(text = siteCol)), eval(parse(text = yearCol))), summarise,
-                          #         napp.smalley   = max(eval(parse(text = smalley)), na.rm = T),
-                          #         napp.MH        = max(eval(parse(text = MH)), na.rm = T),
-                          #         timing.MH      = na.omit(eval(parse(text = timeCol))[eval(parse(text = MH))      == max(eval(parse(text = MH)), na.rm = T)])[1],
-                          #         timing.smalley = na.omit(eval(parse(text = timeCol))[eval(parse(text = smalley)) == napp.smalley])[1]
-                          #         )
-                          # na.omit(tempData[tempData[, MH] == max(tempData[, MH], na.rm = T), timeCol])[1]
-                          # na.omit(tempData[tempData[, smalley] == max(tempData[, smalley], na.rm = T), timeCol])[1] # works
-    ))
-    names(summaryStats)[1:2] <- c( "site", "year")
-    
-    tempData_siteTime     <- paste(tempData[, siteCol], tempData[, yearCol])
-    summaryStats_siteTime <- paste(summaryStats$site, summaryStats$year)
-    
-    colVec    <- grep(smalley, names(tempData))[2]
-    colVec2   <- grep(PSC_B, names(tempData))
-    
-    # should make this an internal operation in nappCalc
-    for (i in 1:length(unique(tempData_siteTime))) {
-      targetSite <- unique(tempData_siteTime)[i]
-      subData    <- tempData[tempData_siteTime %in% targetSite, ] # cols 15:19 are NAPP estimates, 
-      start <- grep("t.smalley" , names(summaryStats))
-      for (j in colVec:colVec2) {
-        suppressWarnings(
-        if (is.finite(max(subData[, j], na.rm = T))) {
-          summaryStats[summaryStats_siteTime %in% targetSite, (start + j - colVec)] <- as.character(subData$time[which.max(subData[, j])])
-        }
+    for (i in 1:length(unique(tempData[, siteCol]))) {
+      targetSite <- unique(tempData[, siteCol])[i]
+      subData1 <- tempData[tempData[, siteCol] %in% targetSite, ]
+      for (j in 1:length(unique(subData1[, yearCol]))) {
+        targetYear <- unique(subData1[, yearCol])[j]
+        subData2   <- subData1[subData1[, yearCol] %in% targetYear, ] 
+        
+        intData <- data.frame(
+        site = targetSite, 
+        year = targetYear,
+        napp.smalley = max(subData2[, smalley], na.rm = T), 
+        napp.MH      = max(subData2[, MH], na.rm = T), 
+        napp.VTS     = max(subData2[, VTS], na.rm = T), 
+        napp.psc.a   = max(subData2[, PSC_A], na.rm = T), 
+        napp.psc.b   = max(subData2[, PSC_B], na.rm = T), 
+        t.smalley    = ifelse(is.finite(max(subData2[, smalley], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, smalley])]), NA),
+        # this ifelse call doesn't block infinite MH napp estimates, but needs to...
+        t.MH         = ifelse(is.finite(max(subData2[, MH], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, MH])]), NA),
+        t.vts        = as.character(subData2[, timeCol][which.max(subData2[, VTS])]),
+        t.psc.a      = as.character(subData2[, timeCol][which.max(subData2[, PSC_A])]),
+        t.psc.b      = as.character(subData2[, timeCol][which.max(subData2[, PSC_B])])
         )
+        
+        if (i != 1) {
+          finalData <- rbind(finalData, intData)
+        } else {
+          finalData <- intData
+        }
+        
       }
     }
-    
-    
-#     # get timing manually
-#     # includes multiple times per year
-#     timing.MH      <- data.frame(tempData[, timeCol][which(tempData[, MH] %in% summaryStats$napp.MH)])
-#     timing.MH$year <- substr(timing.MH[, 1], 5, 9)
-#     summaryStats$timing.MH <- summaryStats$timing.MH <- NA
-#     for(i in 1:length(unique(timing.MH$year))) {
-#       # use first peak
-#       peakTime   <- as.character(timing.MH[timing.MH$year %in% unique(timing.MH$year)[i], 1][1]) # could switch to as.yearmon
-#       insertYear <- timing.MH[timing.MH$year %in% unique(timing.MH$year)[i], "year"][1]
-#       summaryStats$timing.MH[summaryStats$year %in% insertYear] <- peakTime
-#     }
-#     
-#     timing.smalley      <- data.frame(tempData[, timeCol][which(tempData[, smalley] %in% summaryStats$napp.smalley)])
-#     timing.smalley$year <- substr(timing.smalley[, 1], 5, 9)
-#     for(i in 1:length(unique(timing.smalley$year))) {
-#       peakTime   <- as.character(timing.smalley[timing.smalley$year %in% unique(timing.smalley$year)[i], 1][1]) # could switch to as.yearmon
-#       insertYear <- timing.smalley[timing.smalley$year %in% unique(timing.smalley$year)[i], "year"][1]
-#       summaryStats$timing.smalley[summaryStats$year %in% insertYear] <- peakTime
-#     }
-    output <- list(intervalData = tempData, summary = summaryStats)
+    output <- list(intervalData = tempData, summary = finalData)
   }
   output
 }

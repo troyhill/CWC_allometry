@@ -19,8 +19,8 @@ library(ggplot2)
 library(reshape2)
 library(plyr)
 # 'cwc' object has compiled raw allometry data
-# source("C:/RDATA/SPAL_allometry/Script_mergeData_150824.R")
-# or read.csv("C:/RDATA/SPAL_allometry/[csv file with CWC data]")
+# source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_mergeData_150826.R")
+# or read.csv("C:/RDATA/SPAL_allometry/")
 #####
 
 ##### declare custom functions
@@ -72,7 +72,6 @@ CWC.plots <- ddply(cwc, .(site, time, type, marsh), summarise,
                    lngth.top3    =  mean(sort(hgt, decreasing = TRUE)[1:3], na.rm = T),
                    lngth.median =  median(hgt, na.rm = T)
                    )
-CWC.plots$year <- substr(as.character(CWC.plots$time), 5, 9)
 
 ### make sure that an absence of biomass has not been interpreted as an absence of sampling
 nrow(CWC.plots) # 207
@@ -92,6 +91,7 @@ for (i in 1:length(unique(CWC.plots$site))) {
 }
 nrow(CWC.plots) # 5 larger (212)
 tail(CWC.plots) # verified these 150825
+CWC.plots$year <- substr(as.character(CWC.plots$time), 5, 9)
 # write.csv(CWC.plots, file = "C:/RDATA/SPAL_allometry/CWC_plotData_150825.csv")
 
 
@@ -120,13 +120,6 @@ plot.totals <- ddply(CWC.plots, .(site, time, marsh), summarise,
 )
 plot.totals$year <- substr(as.character(plot.totals$time), 5, 9)
 
-### mean, se by site
-site.tot <- ddply(plot.totals, .(marsh, time), summarise,
-                  biomass    = mean(biomass.all, na.rm = T),
-                  stems      = mean(stems.all, na.rm = T),
-                  biomass.se = se(biomass.all),
-                  stems.se   = se(stems.all)                
-)
 
 
 napp <- ddply(CWC.plots, .(marsh, site, time, year), summarise,
@@ -138,6 +131,14 @@ napp <- ddply(CWC.plots, .(marsh, site, time, year), summarise,
               lgth.dead = lngth.top3[type %in% "DEAD"]
 )
 head(napp)
+
+### mean, se by site
+site.tot <- ddply(plot.totals, .(marsh, time), summarise,
+                  biomass    = mean(biomass.all, na.rm = T),
+                  stems      = mean(stems.all, na.rm = T),
+                  biomass.se = se(biomass.all),
+                  stems.se   = se(stems.all)                
+)
 
 
 
@@ -230,6 +231,42 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
 
 
 napp2 <- nappCalc(napp, summarize = "TRUE")
+
+summaryStats <- ddply(napp2[, c(1,2, 4, 15:ncol(napp2))], .(site, year), summarise,
+                          napp.smalley   = max(smalley, na.rm = T),
+                          napp.MH        = max(MH, na.rm = T),
+                          napp.VTS       = max(VTS1975, na.rm = T),
+                          napp.psc.a     = max(psc.live, na.rm = T),
+                          napp.psc.b     = max(psc.tot, na.rm = T),
+                          
+                          t.smalley = as.character(NA),
+                          t.MH      = as.character(NA),
+                          t.vts     = as.character(NA),
+                          t.psc.a   = as.character(NA),
+                          t.psc.b   = as.character(NA)
+                          )
+
+### find peak timing
+    napp2_siteTime     <- paste(napp2[, "site"], napp2[, "year"])
+    summaryStats_siteTime <- paste(summaryStats$site, summaryStats$year)
+    
+    colVec    <- grep("smalley", names(napp2))[2]
+    colVec2   <- grep("psc.tot", names(napp2))
+    
+
+    for (i in 1:length(unique(napp2_siteTime))) {
+      targetSite <- unique(napp2_siteTime)[i]
+      subData    <- napp2[napp2_siteTime %in% targetSite, ]
+      start <- grep("t.smalley" , names(summaryStats))
+      for (j in colVec:colVec2) {
+        suppressWarnings(
+        if (is.finite(max(subData[, j], na.rm = T))) {
+          summaryStats[summaryStats_siteTime %in% targetSite, (start + j - colVec)] <- as.character(subData$time[which.max(subData[, j])])
+        }
+        )
+      }
+    }
+
 
 
 ### Peak standing crop method
