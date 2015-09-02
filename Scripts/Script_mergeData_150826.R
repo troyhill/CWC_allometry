@@ -87,15 +87,16 @@ data13$ID   <- as.character(data13$ID)
 cwc <- rbind(data13, data14[[2]])
 
 # add marsh name
-for (i in 1:nrow(cwc)) {
-  if (cwc$site[i] %in% paste0("LUM", 1:3)) {
-    cwc$marsh[i] <- "LUM"    
-  } else if (cwc$site[i] %in% c("TB1", "TB2")) {
-    cwc$marsh[i] <- "TB-A"
-  } else if (cwc$site[i] %in% c("TB3", "TB4")) {
-    cwc$marsh[i] <- "TB-B"
-  }
-}
+cwc <- marshName(cwc)
+# for (i in 1:nrow(cwc)) {
+#   if (cwc$site[i] %in% paste0("LUM", 1:3)) {
+#     cwc$marsh[i] <- "LUM"    
+#   } else if (cwc$site[i] %in% c("TB1", "TB2")) {
+#     cwc$marsh[i] <- "TB-A"
+#   } else if (cwc$site[i] %in% c("TB3", "TB4")) {
+#     cwc$marsh[i] <- "TB-B"
+#   }
+# }
 
 
 ### remove "bag scrap" samples

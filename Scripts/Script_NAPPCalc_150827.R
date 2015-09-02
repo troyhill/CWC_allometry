@@ -233,9 +233,38 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
 napp2 <- nappCalc(napp, summarize = "TRUE")
 
 napp2$summary
+napp2$summary <- marshName(napp2$summary)
 
-# compare with separate peak standing crop method
+# compare with separate peak standing crop calculation
 PSC(napp)
+
+
+# compare productivity estimates
+# first, summarize
+dd.napp   <- ddply(napp2$summary, .(marsh, year), summarise,
+                   smalley  = mean(napp.smalley, na.rm = T),
+                   MH       = mean(napp.MH, na.rm = T),
+                   VTS      = mean(napp.VTS, na.rm = T),
+                   psc.live = mean(napp.psc.a, na.rm = T),
+                   psc.tot  = mean(napp.psc.b, na.rm = T)
+                  )
+dd.napp.se   <- ddply(napp2$summary, .(marsh, year), summarise,
+                   smalley.se  = se(napp.smalley),
+                   MH.se       = se(napp.MH),
+                   VTS.se      = se(napp.VTS),
+                   psc.live.se = se(napp.psc.a),
+                   psc.tot.se  = se(napp.psc.b)
+                   )
+
+m.napp     <- melt(dd.napp, id.vars = c("marsh", "year"))
+m.napp.se  <- melt(dd.napp.se, id.vars = c("marsh", "year"))
+m.napp$value.se  <- m.napp.se$value
+
+
+ggplot(m.napp, aes(x = year, y = value, col = marsh)) + geom_point() + 
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
+  facet_grid(variable ~ ., scale = "fixed") + ylim(0, 3000) + labs(x = "", y = "") + 
+  theme_bw() + theme(legend.title = element_blank())
 
 
 

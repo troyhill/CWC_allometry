@@ -1,6 +1,22 @@
 library(plyr)
 library(zoo)
 
+marshName <- function(data, siteCol = "site") {
+  # function takes a dataset and the name of the column with site names (e.g., "LUM1"), and 
+  # adds a column with marsh names ("LUM", "TB-A", "TB-B")
+    tempData <- data
+    tempData$marsh <- NA
+    for (i in 1:nrow(tempData)) {
+      if (tempData[, siteCol][i] %in% paste0("LUM", 1:3)) {
+        tempData$marsh[i] <- "LUM"    
+      } else if (tempData[, siteCol][i] %in% c("TB1", "TB2")) {
+        tempData$marsh[i] <- "TB-A"
+      } else if (tempData[, siteCol][i] %in% c("TB3", "TB4")) {
+        tempData$marsh[i] <- "TB-B"
+      }
+    }
+    tempData
+}
 
 proc_CWC_files <- function (dataset, 
                            ExcelParameterFile = "C:/RDATA/SPAL_allometry/data_LUM123/data_CWC_oldCoeffs_150821.txt") {
@@ -620,6 +636,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
         
       }
     }
+    finalData$napp.MH[!is.finite(napp2$summary$napp.MH)] <- NA
     output <- list(intervalData = tempData, summary = finalData)
   }
   output
