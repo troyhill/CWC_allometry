@@ -578,10 +578,11 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
     # sum smalley increments
     subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
     
-    # sum live biomass increments for Millner & Hughes 1968
-    temp <- subData2[, live.inc][subData2[, live.inc] > 0][!is.na(subData2[, live.inc][subData2[, live.inc] > 0])]
-    # this line could be problematic if two live biomass increments are identical in a single year
-    subData2[which(subData2[, live.inc] %in% temp), MH] <- cumsum(temp[!is.na(temp)])
+    # sum positive biomass increments for Millner & Hughes 1968
+    subData2[, "MH.inc"] <- subData2[, live.inc] + subData2[, dead.inc]
+    # use only positive increments to calc MH NAPP
+    subData2[, "MH.inc"][subData2[, "MH.inc"] < 0] <- 0
+    subData2[, MH][!is.na(subData2[, "MH.inc"])] <- cumsum(subData2[, "MH.inc"][!is.na(subData2[, "MH.inc"])])
     
     # sum e from Valiela, Teal, Sass 1975
     subData2[, VTS][!is.na(subData2[, eV])] <- cumsum(subData2[, eV][!is.na(subData2[, eV])])

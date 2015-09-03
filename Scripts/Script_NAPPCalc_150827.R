@@ -48,7 +48,7 @@ labeli <- function(variable, value){
 nappLabelConv <- function(variable, value){
   value <- droplevels(value)
   names_li <- list(
-                   "smalley" = "Smalley 1959", "MH" = "Millner Hughes 1968", 
+                   "smalley" = "Smalley 1959", "MH" = "Milner Hughes 1968", 
                    "VTS" = "Valiela et al. 1975", 
                    "psc.live" = "Peak (live)",
                    "psc.tot" = "Peak (live + dead)"
@@ -274,12 +274,40 @@ m.napp$value.se  <- m.napp.se$value
 
 
 # Compare sites across different methods
-ggplot(m.napp, aes(x = year, y = value, col = marsh)) + geom_point() + 
+ggplot(m.napp[!m.napp$year %in% "2015", ], aes(x = year, y = value, col = marsh)) + geom_point() + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
-  facet_grid(variable ~ ., scale = "fixed", labeller = nappLabelConv) + ylim(0, 3000) + labs(x = "", y = expression("NAPP (g "%.%m^-2~")")) + 
+  facet_grid(variable ~ ., scale = "fixed", labeller = nappLabelConv) + ylim(0, 3500) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
   theme_bw() + theme(legend.title = element_blank())
 # ggsave("C:/RDATA/SPAL_allometry/NAPP_compare.png", width = 7, height= 7, units = "in", dpi = 300)
 
+ggplot(m.napp[(!m.napp$year %in% "2015") & (m.napp$marsh %in% "LUM"), ], aes(x = year, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+           "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_LUM.png", width = 6, height= 5, units = "in", dpi = 300)
+
+
+
+
+ggplot(m.napp[(!m.napp$year %in% "2015"), ], aes(x = year, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ .) +
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_allSites.png", width = 6, height= 5, units = "in", dpi = 300)
+
+
+
+### TODO:
+# run ANOVAs?
 
 #####
 ##### 
