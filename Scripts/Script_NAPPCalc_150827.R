@@ -78,7 +78,9 @@ hist(cwc$mass) # 10 grams?
 
 ##### Aggregate data: plot- and marsh-level metrics
 #####
-CWC.plots <- ddply(cwc, .(site, time, type, marsh), summarise,
+
+# first, add monthYear
+CWC.plots <- ddply(cwc, .(site, time, type, marsh, monthYear), summarise,
                    mass         =  sum(mass, na.rm = T) / plotSize,
                    stems        =  length(type) / plotSize,
                    lngth.top3    =  mean(sort(hgt, decreasing = TRUE)[1:3], na.rm = T),

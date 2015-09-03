@@ -100,12 +100,13 @@ cwc <- marshName(cwc)
 
 
 ### remove "bag scrap" samples
-cwc <- cwc[!cwc$ID %in% "bag scrap", ]
+cwc           <- cwc[!cwc$ID %in% "bag scrap", ]
 cwc$type[cwc$type %in% c("Live")] <- "LIVE"
 cwc$type[cwc$type %in% c("Dead")] <- "DEAD"
-cwc <- droplevels(cwc)
-cwc$time <- as.yearmon(cwc$time, "%b-%y")
-cwc$type <- as.character(cwc$type)
+cwc           <- droplevels(cwc)
+cwc$monthYear <- cwc$time
+cwc$time      <- as.yearmon(cwc$time, "%b-%y")
+cwc$type      <- as.character(cwc$type)
 
 
 

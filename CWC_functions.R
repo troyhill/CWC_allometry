@@ -140,7 +140,6 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
   # year reports all years covered by a dataset; specific year-month combinations are reported by moYr
   da <- paste0(paste0("20", unique(as.character(substr(dataset$time, 5, 6)))), collapse = " ")
   moYr <- paste0(unique(as.character(dataset$time)), collapse = " ")
-   
 
   # check site exclusion flag
   if ((sitesIncluded %in% "all") & (combinePlots %in% countsAsFalse)) {
