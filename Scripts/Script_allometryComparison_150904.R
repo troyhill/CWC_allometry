@@ -145,7 +145,7 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
 }
 
 
-test <- predictBiomass(monthYear = "Jul-14", plot = "LUM1", start_nls = 0.1)
+test <- predictBiomass(monthYear = "Jul-14", plot = "LUM1")
 test[[1]]
 test <- predictBiomass(monthYear = "Jan-14", plot = "LUM1")
 test[[1]]
@@ -153,7 +153,7 @@ test[[1]]
 
 # use all time points to define a plot's model. Positive errors = over-predict biomass
 unique(cwc$monthYear)
-test <- predictBiomass(monthYear = c(unique(cwc$monthYear)), plot = "LUM1", start_nls = 0.01)
+test <- predictBiomass(monthYear = c(unique(cwc$monthYear)), plot = "LUM1")
 test[[1]]
 
 
@@ -163,55 +163,165 @@ test[[1]]
 ### biomass for every other time point, calculating error as the different 
 ### between predicted and observed biomass.
 
-# need to make predictBiomass more robust: skip a month if there's no data
-plot <- "LUM1"
-startVal <- 0.03
+# plot <- "LUM1"
+# startVal <- 0.03
 
-for (i in 1:length(unique(cwc$monthYear))) {
-  temp <- predictBiomass(monthYear = c(unique(cwc$monthYear)[i]), plot = plot, returnData = "FALSE", start_nls = startVal)
+for (j in 1:length(unique(cwc$site))) {
+  for (i in 1:length(unique(cwc$monthYear))) {
+    temp <- predictBiomass(monthYear = c(unique(cwc$monthYear)[i]), plot = unique(cwc$site)[j], returnData = "FALSE")
   
-  if (i != 1) {
-    finalData <- rbind(finalData, temp)
+    if (i != 1) {
+      intData <- rbind(intData, temp)
+    } else {
+      intData <- temp
+    }
+  }
+  temp <- predictBiomass(monthYear = c(unique(cwc$monthYear[cwc$site %in% plot])), plot = unique(cwc$site)[j], returnData = "FALSE")
+  intData <- rbind(intData, temp)
+  
+  if (j != 1) {
+    finalData <- rbind(finalData, intData)
   } else {
-    finalData <- temp
+    finalData <- intData
   }
 }
-unique(finalData$monthYear)
-temp <- predictBiomass(monthYear = c(unique(cwc$monthYear[cwc$site %in% plot])), plot = plot, returnData = "FALSE")
-finalData <- rbind(finalData, temp)
 
 
-finalData$monthYear    <- as.yearmon(finalData$monthYear, "%B-%y")
-finalData$plot         <- as.character(finalData$plot)
-finalData$trainingData <- as.character(finalData$trainingData)
+finalData$monthYear     <- as.yearmon(finalData$monthYear, "%B-%y")
+finalData$plot          <- as.character(finalData$plot)
+finalData$trainingData  <- as.character(finalData$trainingData)
 finalData$trainingData[nchar(finalData$trainingData) > 6] <- "all"
+finalData$biomass.error <- finalData$pred.biomass.live - finalData$obs.biomass.live # magnitude of biomass estimation error (g m2 yr)
+finalData$dead.error    <- finalData$pred.biomass.dead - finalData$obs.biomass.dead    # magnitude of dead biomass estimation error (g m2 yr)
+
+# finalData_allPlots <- finalData
+finalData <- finalData[finalData$plot %in% paste0("LUM", 1:3), ]
+
+# set legend in two columns
 
 # full-scale plot
 ggplot(data = finalData, aes(x = as.factor(monthYear), y = plot.err.live, col = trainingData)) + geom_point() + 
   theme_bw() + labs(x = "", y = "Estimation error (decimal fraction)") + scale_colour_discrete(name = "Training data") + 
-  theme(axis.text.x=element_text(angle = 90, vjust = 0.5))
+  theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + facet_grid(plot ~ .) + ylim(-2, 45)
 
-ggplot(data = finalData, aes(x = as.factor(monthYear), y = plot.err.live, col = trainingData)) + geom_point() + 
-  theme_bw() + labs(x = "", y = "Estimation error (decimal fraction)") + scale_colour_discrete(name = "Training data") + 
+ggplot(data = finalData, aes(x = as.factor(monthYear), y = plot.err.live, 
+  col = trainingData)) + geom_point() + 
+  theme_bw() + labs(x = "", y = "Estimation error (decimal fraction)") +
   theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + 
-  ylim(-10, 10) # 4 points not shown
+  ylim(-10, 10)  + facet_grid(plot ~ .) + guides(colour = guide_legend(title = "Training data", override.aes = list(alpha = 1), ncol = 2))
 # ggsave("C:/RDATA/SPAL_allometry/allom_errors_zoom1.png", width = 11, height= 5, units = "in", dpi = 300)
 
-ggplot(data = finalData, aes(x = as.factor(monthYear), y = plot.err.live, col = trainingData)) + geom_point() + 
-  theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + labs(x = "", y = "Estimation error (decimal fraction)") + scale_colour_discrete(name = "Training data") +
-  ylim(-1, 1) # 70 points not shown
-# ggsave("C:/RDATA/SPAL_allometry/allom_errors_zoom2.png", width = 11, height= 5, units = "in", dpi = 300)
 
-ggplot(data = finalData[finalData$trainingData %in% "all", ], aes(x = as.factor(monthYear), y = plot.err.live)) + # geom_point() + 
+
+ggplot(data = finalData, aes(x = as.factor(monthYear), y = plot.err.live, colour = trainingData)) + 
+  geom_point(alpha = 0.7) + 
+  theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + 
+  labs(x = "", y = "Estimation error (decimal fraction)") + 
+  guides(colour = guide_legend(title = "Training data", override.aes = list(alpha = 1), ncol = 2)) +
+  ylim(-1, 1)  + facet_grid(plot ~ .) 
+# ggsave("C:/RDATA/SPAL_allometry/allom_errors_zoom2.png", width = 11, height= 7, units = "in", dpi = 300)
+
+
+
+ggplot(data = finalData[finalData$trainingData %in% "all", ], 
+       aes(x = as.factor(monthYear), y = plot.err.live)) + # geom_point() + 
   theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + labs(x = "", y = "Estimation error (decimal fraction)") + 
-  scale_colour_discrete(name = "Training data") + geom_text(aes(label = round(plot.err.live, 2)), hjust = 0.5, vjust = 0)
-# ggsave("C:/RDATA/SPAL_allometry/allom_errors_allData_LUM2.png", width = 11, height= 5, units = "in", dpi = 300)
+  scale_colour_discrete(name = "Training data") + geom_text(aes(label = round(plot.err.live, 1)), hjust = 0.5, vjust = 0) +
+  facet_grid(plot ~ .) + ylim(-0.5, 4.2)
+# ggsave("C:/RDATA/SPAL_allometry/allom_errors_allData.png", width = 11, height= 8, units = "in", dpi = 300)
 
+
+# how does estimation error change as function of observed biomass?
+# for individual months, the relationship is very noisy and probably nonexistent
+ggplot(data = finalData, aes(x = obs.biomass.live, y = plot.err.live, colour = as.factor(trainingData))) + # geom_point() + 
+  theme_bw() + labs(x = expression("Observed biomass (g "%.%m^-2~")"), y = "Estimation error (decimal fraction)") + 
+  guides(colour = guide_legend(title = "Training data", override.aes = list(alpha = 1), ncol = 2)) +
+  geom_point() + ylim(-0.5, 4.2)
+# ggsave("C:/RDATA/SPAL_allometry/allom_errors_vs_Obs.png", width = 10, height= 6, units = "in", dpi = 300)
+
+
+# for 'all' data, the relationship is one of relatively low error at high biomasses, 
+# and high (and highly variable) errors at low biomass.
+# This is consistent with allometric equation which seems to show upward bias at low masses.
 ggplot(data = finalData[finalData$trainingData %in% "all", ], aes(x = obs.biomass.live, y = plot.err.live)) + # geom_point() + 
-  theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + labs(x = "", y = "Estimation error (decimal fraction)") + 
-  scale_colour_discrete(name = "Training data") + geom_point()
-# compare with magnitude of error
+  theme_bw() + labs(x = expression("Observed biomass (g "%.%m^-2~")"), y = "Estimation error (decimal fraction)") + 
+  scale_colour_discrete(name = "Training data") + geom_point() +
+  facet_grid(plot ~ .)
+# ggsave("C:/RDATA/SPAL_allometry/allom_errors_vs_Obs_all.png", width = 8, height= 5, units = "in", dpi = 300)
+# pooled data only
+plot(x = finalData$obs.biomass.live[finalData$trainingData %in% "all"], y = finalData$plot.err.live[finalData$trainingData %in% "all"],
+     cex = 0.7, pch = 19, las = 1, ylab = "Estimation error (decimal fraction)", 
+     xlab = expression("Observed biomass (g "%.%m^-2~")"))
 
-### More could be done to investigate outliers (facet by trainingData) etc. but the general conclusion would remain: there are massive uncertainties introduced by using a single month's
+# compare with magnitude of error?
+ggplot(data = finalData, aes(x = obs.biomass.live, y = biomass.error)) + # geom_point() + 
+  theme_bw() + labs(x = expression("Observed biomass (g "%.%m^-2~")"), y = expression("Estimation error (g "%.%m^-2~")")) + 
+  scale_colour_discrete(name = "Training data") + geom_point() +
+  facet_grid(plot ~ .)
+
+ggplot(data = finalData, aes(x = obs.biomass.live, y = biomass.error, colour = as.factor(trainingData))) + # geom_point() + 
+  theme_bw() + labs(x = expression("Observed biomass (g "%.%m^-2~")"), 
+                    y = expression("Estimation error (g "%.%m^-2~")")) + 
+  guides(colour = guide_legend(title = "Training data", override.aes = list(alpha = 1), ncol = 2)) +
+  scale_colour_discrete(name = "Training data") + geom_point() 
+# some really large errors produced by Jan/Feb's data
+
+ggplot(data = finalData[finalData$trainingData %in% "all", ], aes(x = obs.biomass.live, y = biomass.error)) + # geom_point() + 
+  theme_bw() + labs(x = expression("Observed biomass (g "%.%m^-2~")"), y = expression("Estimation error (g "%.%m^-2~")")) + 
+  scale_colour_discrete(name = "Training data") + geom_point() +
+  facet_grid(plot ~ .)
+
+
+
+### More could be done to investigate outliers (e.g., Dec 2013; facet by trainingData) etc. 
+# but the general conclusion would remain: there are massive uncertainties introduced by using 
+# a single month's data to parameterize allometry equations
 ### allometry data 
 
+### which month minimizes error?
+# will have to re-do this after examining Jan-14 live and Jun-14 dead
+# get average biomass.error and plot.err by trainingData
+errSum <- ddply(finalData, .(trainingData), summarise,
+                 # magnitude of errors (g/m2)
+                 live.mag = mean(biomass.error, na.rm = T),
+                 dead.mag = mean(dead.error, na.rm = T),
+                 live.pct = mean(plot.err.live, na.rm = T),
+                 dead.pct = mean(plot.err.dead, na.rm = T)
+  )
+
+errSE <- ddply(finalData, .(trainingData), summarise,
+                # magnitude of errors (g/m2)
+                live.mag.se = se(biomass.error),
+                dead.mag.se = se(dead.error),
+                live.pct.se = se(plot.err.live),
+                dead.pct.se = se(plot.err.dead)
+)
+allDat <- join_all(list(errSum, errSE))
+
+ord <- c(as.character(sort(as.yearmon(unique(errSum$trainingData)[2:28], "%B-%y"))), unique(errSum$trainingData)[1])
+
+min
+
+# combine for ggplot2
+errMelt <- melt(errSum, id.vars = "trainingData")
+seMelt  <- melt(errSE,  id.vars = "trainingData")
+errMelt$se <- seMelt$value
+
+# percentages
+ggplot(errMelt[grep(".pct", errMelt$variable), ], aes(y = value, x = trainingData)) + geom_point() + facet_grid(variable ~ .) +
+  theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + 
+  labs(x = "Training data", y = "Estimation error (decimal fraction)") + 
+  ylim(-0.5, 2) + geom_errorbar(aes(x = trainingData, ymin = value - se , ymax = value + se), width = 0)
+# ggsave("C:/RDATA/SPAL_allometry/PctErrorByTrainingData.png", width = 8, height= 5, units = "in", dpi = 300)
+
+# magnitude
+ggplot(errMelt[grep(".mag", errMelt$variable), ], aes(y = value, x = trainingData)) + geom_point() + facet_grid(variable ~ .) +
+  theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + 
+  labs(x = "Training data", y = expression("Estimation error (g "%.%m^-2~")")) + 
+  ylim(-250, 1500) + geom_errorbar(aes(x = trainingData, ymin = value - se , ymax = value + se), width = 0)
+# ggsave("C:/RDATA/SPAL_allometry/massErrorByTrainingData.png", width = 8, height= 5, units = "in", dpi = 300)
+
+
+### still need to look at seasonal training data
+
+### what is the effect of this error on biomass estimates? 
