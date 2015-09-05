@@ -621,7 +621,6 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
         napp.psc.a   = max(subData2[, PSC_A], na.rm = T), 
         napp.psc.b   = max(subData2[, PSC_B], na.rm = T), 
         t.smalley    = ifelse(is.finite(max(subData2[, smalley], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, smalley])]), NA),
-        # this ifelse call doesn't block infinite MH napp estimates, but needs to...
         t.MH         = ifelse(is.finite(max(subData2[, MH], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, MH])]), NA),
         t.vts        = as.character(subData2[, timeCol][which.max(subData2[, VTS])]),
         t.psc.a      = as.character(subData2[, timeCol][which.max(subData2[, PSC_A])]),

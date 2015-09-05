@@ -2,6 +2,7 @@
 
 library(zoo)
 library(plyr)
+library(knitr)
 
 # load custom functions
 # source("C:/RDATA/SPAL_allometry/CWC_allometry/CWC_functions.R") # see https://github.com/troyhill/CWC_allometry/blob/master/CWC_functions.R for updated version
@@ -10,9 +11,11 @@ library(plyr)
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_mergeData_150826.R")
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_NAPPCalc_150827.R")
 
+
 # function to apply allometry to other time points (same plot). Generates a residual (observed - predicted)
 predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25, 
-                           removeTrainingData = "FALSE", returnData = "TRUE", start_nls = 0.03) {
+                           removeTrainingData = "FALSE", returnData = "TRUE", start_nls = 0.03,
+                           coefReturn = "FALSE") {
   # allometryData:  object with allometry parameters (cwc.params)
   # plotData:       object with plot data on plant heights and masses (cwc)
   # summaryData:    data with total biomass per plot, per time interval (maybe not needed)
@@ -23,7 +26,9 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
 #   
 #   plotData      <- cwc
 #   summaryData   <- CWC.plots # plot.totals has combined live/dead, CWC.plots distinguishes live/dead
-   
+  
+  # TODO: add site name to coef dataframe
+  
   countsAsTrue <- c("TRUE", "true", "T", "True")
   plotSize     <- quadrat^2
   
@@ -137,11 +142,31 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
   
   }
   
-  if(returnData %in% countsAsTrue) {
-    output <- list(summary = output, data = newData)
+  if (returnData %in% countsAsTrue) {
+    if (coefReturn %in% countsAsTrue) {
+      coef.df <- data.frame(coef.live = a.live,
+                            exp.live  = b.live,
+                            coef.dead = a.dead,
+                            exp.dead  = b.dead
+      )
+      output <- list(summary = output, data = newData, coefs = coef.df)
+    } else {
+      output <- list(summary = output, data = newData)
+    }
   } else {
-    output
+    if (coefReturn %in% countsAsTrue) {
+      coef.df <- data.frame(coef.live = a.live,
+                            exp.live  = b.live,
+                            coef.dead = a.dead,
+                            exp.dead  = b.dead
+      )
+      output <- list(summary = output, coefs = coef.df)
+    } else {
+      output
+    }
   }
+
+  
 }
 
 
@@ -300,8 +325,6 @@ allDat <- join_all(list(errSum, errSE))
 
 ord <- c(as.character(sort(as.yearmon(unique(errSum$trainingData)[2:28], "%B-%y"))), unique(errSum$trainingData)[1])
 
-min
-
 # combine for ggplot2
 errMelt <- melt(errSum, id.vars = "trainingData")
 seMelt  <- melt(errSE,  id.vars = "trainingData")
@@ -318,10 +341,102 @@ ggplot(errMelt[grep(".pct", errMelt$variable), ], aes(y = value, x = trainingDat
 ggplot(errMelt[grep(".mag", errMelt$variable), ], aes(y = value, x = trainingData)) + geom_point() + facet_grid(variable ~ .) +
   theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + 
   labs(x = "Training data", y = expression("Estimation error (g "%.%m^-2~")")) + 
-  ylim(-250, 1500) + geom_errorbar(aes(x = trainingData, ymin = value - se , ymax = value + se), width = 0)
+  ylim(-100, 200) + geom_errorbar(aes(x = trainingData, ymin = value - se , ymax = value + se), width = 0)
 # ggsave("C:/RDATA/SPAL_allometry/massErrorByTrainingData.png", width = 8, height= 5, units = "in", dpi = 300)
 
 
+kable(allDat, digits = 2)
+
 ### still need to look at seasonal training data
 
+
+
+
+
+
+
+
+
+
+
+
 ### what is the effect of this error on biomass estimates? 
+
+head(finalData)
+# re-build "finalData", but include coefficients
+nappEst <- predictBiomass(monthYear = unique(cwc$monthYear), 
+               plot = unique(cwc$site), returnData = "TRUE",
+               coefReturn = "TRUE")
+
+nappEst[[1]]$monthYear     <- as.yearmon(nappEst[[1]]$monthYear, "%B-%y")
+nappEst[[1]]$plot          <- as.character(nappEst[[1]]$plot)
+nappEst[[1]]$trainingData  <- as.character(nappEst[[1]]$trainingData)
+nappEst[[1]]$trainingData[nchar(nappEst[[1]]$trainingData) > 6] <- "all"
+nappEst[[1]]$biomass.error <- nappEst[[1]]$pred.biomass.live - nappEst[[1]]$obs.biomass.live # magnitude of biomass estimation error (g m2 yr)
+nappEst[[1]]$dead.error    <- nappEst[[1]]$pred.biomass.dead - nappEst[[1]]$obs.biomass.dead    # magnitude of dead biomass estimation error (g m2 yr)
+
+nappEst[[3]]
+
+# # returned output seems odd; check manually
+# y.live <- cwc$mass[cwc$type %in% "LIVE"]
+# x.live <- cwc$hgt[cwc$type %in% "LIVE"]
+# y.live2 <- y.live[!is.na(y.live) & !is.na(x.live)]
+# x.live2 <- x.live[!is.na(y.live) & !is.na(x.live)]
+# # same result
+# live.coefs <- coef(model <- nls(y.live2 ~ I(a * exp(b * x.live2)), start = list(a = 0.03, b = 0.03)))
+#
+# # do the same for dead material
+# y.dead <- cwc$mass[cwc$type %in% "DEAD"]
+# x.dead <- cwc$hgt[cwc$type %in% "DEAD"]
+# y.dead2 <- y.dead[!is.na(y.dead) & !is.na(x.dead)]
+# x.dead2 <- x.dead[!is.na(y.dead) & !is.na(x.dead)]
+# # same result, again
+# dead.coefs <- coef(model <- nls(y.dead2 ~ I(a * exp(b * x.dead2)), start = list(a = 0.03, b = 0.03)))
+
+
+# build dataset similar to napp
+head(nappEst[[2]])
+
+nappEst.plots <- ddply(nappEst[[2]], .(site, time, type, marsh, monthYear), summarise,
+                   mass         =  sum(mass, na.rm = T) / plotSize,
+                   pred.mass    =  sum(predicted, na.rm = T) / plotSize
+)
+
+### make sure that an absence of biomass has not been interpreted as an absence of sampling
+nrow(nappEst.plots) # 207
+for (i in 1:length(unique(nappEst.plots$site))) {
+  for (j in 1:length(unique(nappEst.plots$time))) {
+    plot    <- unique(nappEst.plots$site)[i]
+    time    <- unique(nappEst.plots$time)[j]
+    subData <- nappEst.plots[(nappEst.plots$site %in% plot) & (nappEst.plots$time == time), ]
+    if (nrow(subData) == 1) { 
+      fillData                     <- subData[1, ]
+      fillData$type                <- ifelse(fillData$type %in% "LIVE", "DEAD", "LIVE")
+      fillData[, 5:ncol(fillData)] <- as.numeric(0)
+      nappEst.plots <- rbind(nappEst.plots, fillData)
+    }
+  }
+  rownames(nappEst.plots) <- 1:nrow(nappEst.plots)
+}
+nrow(nappEst.plots) # 5 larger (212)
+tail(nappEst.plots) # verified these 150825
+nappEst.plots$year <- substr(as.character(nappEst.plots$time), 5, 9)
+
+nappEst_proc <- ddply(nappEst.plots, .(marsh, site, time, year), summarise,
+              live      = mass[type %in% "LIVE"],
+              dead      = mass[type %in% "DEAD"],
+              live.pred = pred.mass[type %in% "LIVE"],
+              dead.pred = pred.mass[type %in% "DEAD"]
+)
+head(nappEst_proc, 20)
+
+
+# observed data
+napp.obs <- nappCalc(nappEst_proc, summarize = "TRUE")
+napp.obs$summary
+napp.obs$summary <- marshName(napp.obs$summary)
+
+# predicted data
+napp.pred <- nappCalc(nappEst_proc, summarize = "TRUE")
+napp.pred$summary
+napp.pred$summary <- marshName(napp.pred$summary)
