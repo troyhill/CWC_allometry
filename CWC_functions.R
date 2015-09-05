@@ -121,7 +121,9 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
   # clean up the dataset
   if (names(dataset)[13] %in% "Total.Dried.Plant.Weight") {  
     names(dataset)[c(1:7, 13)] <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
-  } else names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
+  } else if (!names(dataset)[8] %in% "mass") {
+    names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
+  }
   
   # remove empty rows and columns
   dataset <- dataset[!is.na(dataset$ID), c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")]
@@ -636,7 +638,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
         
       }
     }
-    finalData$napp.MH[!is.finite(napp2$summary$napp.MH)] <- NA
+    finalData$napp.MH[!is.finite(finalData$napp.MH)] <- NA
     output <- list(intervalData = tempData, summary = finalData)
   }
   output
