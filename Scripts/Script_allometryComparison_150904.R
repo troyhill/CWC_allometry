@@ -428,15 +428,64 @@ nappEst_proc <- ddply(nappEst.plots, .(marsh, site, time, year), summarise,
               live.pred = pred.mass[type %in% "LIVE"],
               dead.pred = pred.mass[type %in% "DEAD"]
 )
+# nappEst_proc <- ddply(nappEst.plots, .(marsh, site, time, year), summarise,
+#               live      = pred.mass[type %in% "LIVE"],
+#               dead      = pred.mass[type %in% "DEAD"]
+# )
+
 head(nappEst_proc, 20)
 
 
 # observed data
-napp.obs <- nappCalc(nappEst_proc, summarize = "TRUE")
+napp.obs <- nappCalc(nappEst_proc[nappEst_proc$year %in% c(2013, 2014), ], summarize = "TRUE")
 napp.obs$summary
 napp.obs$summary <- marshName(napp.obs$summary)
 
-# predicted data
-napp.pred <- nappCalc(nappEst_proc, summarize = "TRUE")
+# predicted data [problem]
+napp.pred <- nappCalc(nappEst_proc[nappEst_proc$year %in% c(2013, 2014), ], liveCol = "live.pred", 
+                      deadCol = "dead.pred", summarize = "TRUE")
 napp.pred$summary
 napp.pred$summary <- marshName(napp.pred$summary)
+
+
+
+
+# another couple ddplys for good luck...
+dd.napp.pred   <- ddply(napp.pred$summary, .(marsh, year), summarise,
+                   smalley.pred  = mean(napp.smalley, na.rm = T),
+                   MH.pred       = mean(napp.MH, na.rm = T),
+                   VTS.pred      = mean(napp.VTS, na.rm = T),
+                   psc.live.pred = mean(napp.psc.a, na.rm = T),
+                   psc.tot.pred  = mean(napp.psc.b, na.rm = T)
+)
+dd.napp.se.pred   <- ddply(napp.pred$summary, .(marsh, year), summarise,
+                      smalley.se.pred  = se(napp.smalley),
+                      MH.se.pred       = se(napp.MH),
+                      VTS.se.pred      = se(napp.VTS),
+                      psc.live.se.pred = se(napp.psc.a),
+                      psc.tot.se.pred  = se(napp.psc.b)
+)
+
+m.napp.pred     <- melt(dd.napp.pred, id.vars = c("marsh", "year"))
+m.napp.se.pred  <- melt(dd.napp.se.pred, id.vars = c("marsh", "year"))
+m.napp.pred$value.se  <- m.napp.se.pred$value
+
+nappAll <- rbind(m.napp, m.napp.pred)
+# head(nappAll)
+nappAll$class <- "Observed"
+nappAll$class[grep(".pred", nappAll$variable)] <- "Predicted"
+nappAll$variable[grep(".pred", nappAll$variable)] <- gsub(".pred", "", nappAll$variable[grep(".pred", nappAll$variable)])
+
+
+
+ggplot(nappAll[(!nappAll$year %in% "2015"), ], aes(x = class, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ year) +
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_ObsPred.png", width = 8, height= 6, units = "in", dpi = 300)
+
+
