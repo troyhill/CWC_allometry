@@ -11,8 +11,8 @@ source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_mergeData_150826.R"
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_NAPPCalc_150827.R")
 
 # function to apply allometry to other time points (same plot). Generates a residual (observed - predicted)
-predictBiomass <- function(allometryData = cwc.params, plotData = cwc, monthYear, plot, quadrat = 0.25, 
-                           removeTrainingData = "TRUE", returnData = "FALSE") {
+predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25, 
+                           removeTrainingData = "FALSE", returnData = "TRUE", start_nls = 0.03) {
   # allometryData:  object with allometry parameters (cwc.params)
   # plotData:       object with plot data on plant heights and masses (cwc)
   # summaryData:    data with total biomass per plot, per time interval (maybe not needed)
@@ -21,10 +21,9 @@ predictBiomass <- function(allometryData = cwc.params, plotData = cwc, monthYear
   # removeTrainingData: determines whether training data should also be modeled
   # returnData:     indicates whether predicted is returned by the function
 #   
-#   allometryData <- cwc.params
 #   plotData      <- cwc
 #   summaryData   <- CWC.plots # plot.totals has combined live/dead, CWC.plots distinguishes live/dead
-#   
+   
   countsAsTrue <- c("TRUE", "true", "T", "True")
   plotSize     <- quadrat^2
   
@@ -35,34 +34,32 @@ predictBiomass <- function(allometryData = cwc.params, plotData = cwc, monthYear
     newData <- plotData[(as.character(plotData$site) %in% plot), ]
   }
   
+  test.live <- nrow(newData[(newData$type %in% "LIVE") & (newData$monthYear %in% monthYear), ]) > 3
+  test.dead <- nrow(newData[(newData$type %in% "DEAD") & (newData$monthYear %in% monthYear), ]) > 3
+  
   # generate allometry params (allows multiple months to be combined)  
-  y.live <- plotData$mass[(as.character(plotData$site) %in% plot) & (plotData$monthYear %in% monthYear) & 
-                       (plotData$type %in% "LIVE")]
-  x.live <- plotData$hgt[(as.character(plotData$site) %in% plot) & (plotData$monthYear %in% monthYear) & 
-                            (plotData$type %in% "LIVE")]
-  y.live2 <- y.live[!is.na(y.live) & !is.na(x.live)]
-  x.live2 <- x.live[!is.na(y.live) & !is.na(x.live)]
   # why doesn't this work?!?!
-  if (nrow(newData[newData$type %in% "LIVE", ]) > 0) {
-    live.coefs <- coef(model <- nls(y.live2 ~ I(a * exp(b * x.live2)), start = list(a = 0.05, 
-                                                          b = 0.05)))
+  if (test.live) {
+    y.live <- newData$mass[(newData$monthYear %in% monthYear) & (newData$type %in% "LIVE")]
+    x.live <- newData$hgt[(newData$monthYear %in% monthYear) & (newData$type %in% "LIVE")]
+    y.live2 <- y.live[!is.na(y.live) & !is.na(x.live)]
+    x.live2 <- x.live[!is.na(y.live) & !is.na(x.live)]
+    live.coefs <- coef(model <- nls(y.live2 ~ I(a * exp(b * x.live2)), start = list(a = start_nls, 
+                                                          b = start_nls)))
   } else {
     live.coefs <- c(NA, NA)
   }
   # force through zero?
 #   plot(y.live2 ~ x.live2)
 #   lines(1:150, y = live.coefs[1] * exp(live.coefs[2] * 1:150))
-#   
-  y.dead <- plotData$mass[(as.character(plotData$site) %in% plot) & (plotData$monthYear %in% monthYear) & 
-                            (plotData$type %in% "DEAD")]
-  x.dead <- plotData$hgt[(as.character(plotData$site) %in% plot) & (plotData$monthYear %in% monthYear) & 
-                           (plotData$type %in% "DEAD")]
-  y.dead2 <- y.dead[!is.na(y.dead) & !is.na(x.dead)]
-  x.dead2 <- x.dead[!is.na(y.dead) & !is.na(x.dead)]
-  
-  if (nrow(newData[newData$type %in% "LIVE", ]) > 0) {
-    dead.coefs <- coef(model <- nls(y.dead2 ~ I(a * exp(b * x.dead2)), start = list(a = 0.05, 
-        b = 0.05)))
+   
+  if (test.dead) {
+    y.dead <- newData$mass[(newData$monthYear %in% monthYear) & (newData$type %in% "DEAD")]
+    x.dead <- newData$hgt[(newData$monthYear %in% monthYear) & (newData$type %in% "DEAD")]
+    y.dead2 <- y.dead[!is.na(y.dead) & !is.na(x.dead)]
+    x.dead2 <- x.dead[!is.na(y.dead) & !is.na(x.dead)]
+    dead.coefs <- coef(model <- nls(y.dead2 ~ I(a * exp(b * x.dead2)), start = list(a = start_nls, 
+        b = start_nls)))
   } else {
     dead.coefs <- c(NA, NA)
   }
@@ -88,7 +85,7 @@ predictBiomass <- function(allometryData = cwc.params, plotData = cwc, monthYear
     
     
     # this if statement accommodates months where one type of biomass is absent
-    if (nrow(newData[newData$type %in% "LIVE", ]) > 0) {
+    if (test.live) {
       # error per stem
       live.stem.err  <- median(subData$stem.err[subData$type %in% "LIVE"], na.rm = T)
       # error per plot
@@ -103,7 +100,7 @@ predictBiomass <- function(allometryData = cwc.params, plotData = cwc, monthYear
     }
     
     # do the same for dead biomass
-    if (nrow(newData[newData$type %in% "DEAD", ]) > 0) {
+    if (test.dead) {
       dead.stem.err  <- median(subData$stem.err[subData$type %in% "DEAD"], na.rm = T)
       dead.mass.obs  <- sum(subData$mass[subData$type %in% "DEAD"], na.rm = T) / plotSize
       dead.mass.pred <- sum(subData$predicted[subData$type %in% "DEAD"], na.rm = T) / plotSize
@@ -148,13 +145,15 @@ predictBiomass <- function(allometryData = cwc.params, plotData = cwc, monthYear
 }
 
 
-test <- predictBiomass(monthYear = "Aug-14", plot = "LUM1", removeTrainingData = "FALSE", returnData = "TRUE")
+test <- predictBiomass(monthYear = "Jul-14", plot = "LUM1", start_nls = 0.1)
+test[[1]]
+test <- predictBiomass(monthYear = "Jan-14", plot = "LUM1")
 test[[1]]
 
 
 # use all time points to define a plot's model. Positive errors = over-predict biomass
 unique(cwc$monthYear)
-test <- predictBiomass(monthYear = c(unique(cwc$monthYear)), plot = "LUM1", removeTrainingData = "FALSE", returnData = "TRUE")
+test <- predictBiomass(monthYear = c(unique(cwc$monthYear)), plot = "LUM1", start_nls = 0.01)
 test[[1]]
 
 
@@ -165,8 +164,11 @@ test[[1]]
 ### between predicted and observed biomass.
 
 # need to make predictBiomass more robust: skip a month if there's no data
+plot <- "LUM1"
+startVal <- 0.03
+
 for (i in 1:length(unique(cwc$monthYear))) {
-  temp <- predictBiomass(monthYear = c(unique(cwc$monthYear)[i]), plot = "LUM3", removeTrainingData = "FALSE")
+  temp <- predictBiomass(monthYear = c(unique(cwc$monthYear)[i]), plot = plot, returnData = "FALSE", start_nls = startVal)
   
   if (i != 1) {
     finalData <- rbind(finalData, temp)
@@ -174,11 +176,11 @@ for (i in 1:length(unique(cwc$monthYear))) {
     finalData <- temp
   }
 }
-
-temp <- predictBiomass(monthYear = unique(cwc$monthYear), plot = c("LUM3"), removeTrainingData = "FALSE")
+unique(finalData$monthYear)
+temp <- predictBiomass(monthYear = c(unique(cwc$monthYear[cwc$site %in% plot])), plot = plot, returnData = "FALSE")
 finalData <- rbind(finalData, temp)
-str(finalData)
-names(finalData)
+
+
 finalData$monthYear    <- as.yearmon(finalData$monthYear, "%B-%y")
 finalData$plot         <- as.character(finalData$plot)
 finalData$trainingData <- as.character(finalData$trainingData)
@@ -204,6 +206,11 @@ ggplot(data = finalData[finalData$trainingData %in% "all", ], aes(x = as.factor(
   theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + labs(x = "", y = "Estimation error (decimal fraction)") + 
   scale_colour_discrete(name = "Training data") + geom_text(aes(label = round(plot.err.live, 2)), hjust = 0.5, vjust = 0)
 # ggsave("C:/RDATA/SPAL_allometry/allom_errors_allData_LUM2.png", width = 11, height= 5, units = "in", dpi = 300)
+
+ggplot(data = finalData[finalData$trainingData %in% "all", ], aes(x = obs.biomass.live, y = plot.err.live)) + # geom_point() + 
+  theme_bw() + theme(axis.text.x=element_text(angle = 90, vjust = 0.5)) + labs(x = "", y = "Estimation error (decimal fraction)") + 
+  scale_colour_discrete(name = "Training data") + geom_point()
+# compare with magnitude of error
 
 ### More could be done to investigate outliers (facet by trainingData) etc. but the general conclusion would remain: there are massive uncertainties introduced by using a single month's
 ### allometry data 
