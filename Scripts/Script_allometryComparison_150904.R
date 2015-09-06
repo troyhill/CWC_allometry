@@ -361,8 +361,107 @@ kable(allDat, digits = 2)
 
 
 ### what is the effect of this error on biomass estimates? 
+for (i in 1:length(unique(cwc$site))) {
+  intData <- predictBiomass(monthYear = unique(cwc$monthYear), 
+                          plot = unique(cwc$site)[i], returnData = "TRUE")[[2]]
+  if (i != 1) {
+    nappEst2 <- rbind(nappEst2, intData)
+  } else {
+    nappEst2 <- intData
+  }
+}
 
-head(finalData)
+nappEst2.plots <- ddply(nappEst2, .(site, time, type, marsh, monthYear), summarise,
+                       mass         =  sum(mass, na.rm = T) / plotSize,
+                       pred.mass    =  sum(predicted, na.rm = T) / plotSize
+)
+
+### make sure that an absence of biomass has not been interpreted as an absence of sampling
+nrow(nappEst2.plots) # 207
+for (i in 1:length(unique(nappEst2.plots$site))) {
+  for (j in 1:length(unique(nappEst2.plots$time))) {
+    plot    <- unique(nappEst2.plots$site)[i]
+    time    <- unique(nappEst2.plots$time)[j]
+    subData <- nappEst2.plots[(nappEst2.plots$site %in% plot) & (nappEst2.plots$time == time), ]
+    if (nrow(subData) == 1) { 
+      fillData                     <- subData[1, ]
+      fillData$type                <- ifelse(fillData$type %in% "LIVE", "DEAD", "LIVE")
+      fillData[, 5:ncol(fillData)] <- as.numeric(0)
+      nappEst2.plots <- rbind(nappEst2.plots, fillData)
+    }
+  }
+  rownames(nappEst2.plots) <- 1:nrow(nappEst2.plots)
+}
+nrow(nappEst.plots) # 5 larger (212)
+tail(nappEst.plots) 
+nappEst2.plots$year <- substr(as.character(nappEst2.plots$time), 5, 9)
+
+nappEst2proc <- ddply(nappEst2.plots, .(marsh, site, time, year), summarise,
+                      live      = mass[type %in% "LIVE"],
+                      dead      = mass[type %in% "DEAD"],
+                      live.pred = pred.mass[type %in% "LIVE"],
+                      dead.pred = pred.mass[type %in% "DEAD"]
+)
+
+
+# observed data
+napp.obs2 <- nappCalc(nappEst2proc[nappEst2proc$year %in% c(2013, 2014), ], summarize = "TRUE")
+napp.obs2$summary <- marshName(napp.obs2$summary)
+
+# predicted data [problem]
+napp.pred2 <- nappCalc(nappEst2proc[nappEst2proc$year %in% c(2013, 2014), ], liveCol = "live.pred", 
+                      deadCol = "dead.pred", summarize = "TRUE")
+napp.pred2$summary <- marshName(napp.pred2$summary)
+
+
+
+# another couple ddplys for good luck...
+dd.napp.pred2   <- ddply(napp.pred2$summary, .(marsh, year), summarise,
+                        smalley.pred  = mean(napp.smalley, na.rm = T),
+                        MH.pred       = mean(napp.MH, na.rm = T),
+                        VTS.pred      = mean(napp.VTS, na.rm = T),
+                        psc.live.pred = mean(napp.psc.a, na.rm = T),
+                        psc.tot.pred  = mean(napp.psc.b, na.rm = T)
+)
+dd.napp.se.pred2   <- ddply(napp.pred2$summary, .(marsh, year), summarise,
+                           smalley.se.pred  = se(napp.smalley),
+                           MH.se.pred       = se(napp.MH),
+                           VTS.se.pred      = se(napp.VTS),
+                           psc.live.se.pred = se(napp.psc.a),
+                           psc.tot.se.pred  = se(napp.psc.b)
+)
+
+m.napp.pred2     <- melt(dd.napp.pred2, id.vars = c("marsh", "year"))
+m.napp.se.pred2  <- melt(dd.napp.se.pred2, id.vars = c("marsh", "year"))
+m.napp.pred2$value.se  <- m.napp.se.pred2$value
+
+nappAll2 <- rbind(m.napp, m.napp.pred2)
+nappAll2$class <- "Observed"
+nappAll2$class[grep(".pred", nappAll2$variable)] <- "Predicted"
+nappAll2$variable[grep(".pred", nappAll2$variable)] <- gsub(".pred", "", nappAll2$variable[grep(".pred", nappAll2$variable)])
+
+
+ggplot(nappAll2[(!nappAll2$year %in% "2015"), ], aes(x = class, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ year) +
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_ObsPred_siteAlloms.png", width = 8, height= 6, units = "in", dpi = 300)
+
+
+
+
+
+
+
+
+
+
+
+### Use a single allometric equation, built from all plots and all sampling points
 # re-build "finalData", but include coefficients
 nappEst <- predictBiomass(monthYear = unique(cwc$monthYear), 
                plot = unique(cwc$site), returnData = "TRUE",
@@ -377,7 +476,7 @@ nappEst[[1]]$dead.error    <- nappEst[[1]]$pred.biomass.dead - nappEst[[1]]$obs.
 
 nappEst[[3]]
 
-# # returned output seems odd; check manually
+# # check manually
 # y.live <- cwc$mass[cwc$type %in% "LIVE"]
 # x.live <- cwc$hgt[cwc$type %in% "LIVE"]
 # y.live2 <- y.live[!is.na(y.live) & !is.na(x.live)]
@@ -428,12 +527,6 @@ nappEst_proc <- ddply(nappEst.plots, .(marsh, site, time, year), summarise,
               live.pred = pred.mass[type %in% "LIVE"],
               dead.pred = pred.mass[type %in% "DEAD"]
 )
-# nappEst_proc <- ddply(nappEst.plots, .(marsh, site, time, year), summarise,
-#               live      = pred.mass[type %in% "LIVE"],
-#               dead      = pred.mass[type %in% "DEAD"]
-# )
-
-head(nappEst_proc, 20)
 
 
 # observed data
@@ -489,3 +582,96 @@ ggplot(nappAll[(!nappAll$year %in% "2015"), ], aes(x = class, y = value, fill = 
 # ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_ObsPred.png", width = 8, height= 6, units = "in", dpi = 300)
 
 
+
+
+
+### Really what I want to do is apply an equation generated by, e.g., LUM1, to the other plots
+### and compare the predictions
+# LUM1 2014
+lum1coefs <- predictBiomass(monthYear = grep("14", unique(cwc$monthYear), value = TRUE), 
+                          plot = "LUM1", returnData = "TRUE",
+                          coefReturn = "TRUE")[[3]]
+
+cwc.pr <- cwc
+cwc.pr$LUM1.pred <- NA
+cwc.pr$LUM1.pred[cwc.pr$type %in% "LIVE"] <- lum1coefs$coef.live * exp(lum1coefs$exp.live * cwc.pr$hgt[cwc.pr$type %in% "LIVE"])
+cwc.pr$LUM1.pred[cwc.pr$type %in% "DEAD"] <- lum1coefs$coef.dead * exp(lum1coefs$exp.dead * cwc.pr$hgt[cwc.pr$type %in% "DEAD"])
+
+lum1Est <- ddply(cwc.pr, .(site, time, type, marsh, monthYear), summarise,
+                       mass         =  sum(mass, na.rm = T) / plotSize,
+                       pred.mass    =  sum(LUM1.pred, na.rm = T) / plotSize
+)
+
+### make sure that an absence of biomass has not been interpreted as an absence of sampling
+nrow(lum1Est) # 207
+for (i in 1:length(unique(lum1Est$site))) {
+  for (j in 1:length(unique(lum1Est$time))) {
+    plot    <- unique(lum1Est$site)[i]
+    time    <- unique(lum1Est$time)[j]
+    subData <- lum1Est[(lum1Est$site %in% plot) & (lum1Est$time == time), ]
+    if (nrow(subData) == 1) { 
+      fillData                     <- subData[1, ]
+      fillData$type                <- ifelse(fillData$type %in% "LIVE", "DEAD", "LIVE")
+      fillData[, 5:ncol(fillData)] <- as.numeric(0)
+      lum1Est <- rbind(lum1Est, fillData)
+    }
+  }
+  rownames(lum1Est) <- 1:nrow(lum1Est)
+}
+
+lum1Est$year <- substr(as.character(lum1Est$time), 5, 9)
+
+lum1EstProc <- ddply(lum1Est, .(marsh, site, time, year), summarise,
+                      live      = mass[type %in% "LIVE"],
+                      dead      = mass[type %in% "DEAD"],
+                      live.pred = pred.mass[type %in% "LIVE"],
+                      dead.pred = pred.mass[type %in% "DEAD"]
+)
+
+
+# observed data
+napp.obs <- nappCalc(lum1EstProc[lum1EstProc$year %in% c(2013, 2014), ], summarize = "TRUE")
+napp.obs$summary <- marshName(napp.obs$summary)
+
+# predicted data [problem]
+napp.pred <- nappCalc(lum1EstProc[lum1EstProc$year %in% c(2013, 2014), ], liveCol = "live.pred", 
+                      deadCol = "dead.pred", summarize = "TRUE")
+napp.pred$summary <- marshName(napp.pred$summary)
+
+
+# another couple ddplys for good luck...
+dd.napp.pred   <- ddply(napp.pred$summary, .(marsh, year), summarise,
+                        smalley.pred  = mean(napp.smalley, na.rm = T),
+                        MH.pred       = mean(napp.MH, na.rm = T),
+                        VTS.pred      = mean(napp.VTS, na.rm = T),
+                        psc.live.pred = mean(napp.psc.a, na.rm = T),
+                        psc.tot.pred  = mean(napp.psc.b, na.rm = T)
+)
+dd.napp.se.pred   <- ddply(napp.pred$summary, .(marsh, year), summarise,
+                           smalley.se.pred  = se(napp.smalley),
+                           MH.se.pred       = se(napp.MH),
+                           VTS.se.pred      = se(napp.VTS),
+                           psc.live.se.pred = se(napp.psc.a),
+                           psc.tot.se.pred  = se(napp.psc.b)
+)
+
+m.napp.pred     <- melt(dd.napp.pred, id.vars = c("marsh", "year"))
+m.napp.se.pred  <- melt(dd.napp.se.pred, id.vars = c("marsh", "year"))
+m.napp.pred$value.se  <- m.napp.se.pred$value
+
+nappAll <- rbind(m.napp, m.napp.pred)
+nappAll$class <- "Observed"
+nappAll$class[grep(".pred", nappAll$variable)] <- "Predicted"
+nappAll$variable[grep(".pred", nappAll$variable)] <- gsub(".pred", "", nappAll$variable[grep(".pred", nappAll$variable)])
+
+
+
+ggplot(nappAll[(!nappAll$year %in% "2015"), ], aes(x = class, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ year) +
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP_ObsPred_LUM1data.png", width = 8, height= 6, units = "in", dpi = 300)
