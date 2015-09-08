@@ -103,7 +103,10 @@ proc_CWC_files <- function (dataset,
   returnVals
 }
 
-
+# note 150908: getAllometryParams should be used to merge data (e.g., generate 'cwc' dataset).
+# allometry equation used is an inferior model: y = a*exp(b*x). Superior model (y = ax^b) is not always robust to small monthly datasets
+# TODO: change getAllometryParams to a general pre-processing function or incorporate a large cutoff trigger to make regressions work
+# or, combine good parts of getAllometryParams (dataset processing) into predictBiomass (so predictBiomass can be fed a list of raw data files)
 getAllometryParams <- function (dataset, sitesIncluded = "all", 
                                 returnData = "FALSE", combinePlots = "FALSE") {
   # function returns parameters for exponential fits (and diagnostic plots, saved to working directory)
@@ -647,11 +650,12 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
 }
 
 
-
+# note 150907: changed to use y = a*x^b
 predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25, 
                            removeTrainingData = "FALSE", returnData = "TRUE", start_nls = 0.03,
-                           coefReturn = "FALSE", cutoff = 5) {
-  # note 150907: changed to y = a*x^b and monthly data
+                           coefReturn = "FALSE", cutoff = 5, moYrFormat = "%B-%y", 
+                           typeCol = "type", timeCol = "monthYear", heightCol = "hgt",
+                           siteCol = "site" , massCol = "mass") {
   # function to apply allometry to other time points (same plot). Generates a residual (observed - predicted)
   # allometryData:  object with allometry parameters (cwc.params)
   # plotData:       object with plot data on plant heights and masses (cwc)
@@ -671,19 +675,21 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
   
   # isolate plot x's data (and exclude month(s) used to parameterize model, if desired)
   if (removeTrainingData %in% countsAsTrue) {
-    newData <- plotData[(as.character(plotData$site) %in% plot) & (!plotData$monthYear %in% monthYear), ]
+    trainingDataSubset <- plotData[(as.character(plotData[, siteCol]) %in% plot) & (plotData[, timeCol] %in% monthYear), ]
+    # newData: full dataset, modified before being output. 'removeTrainingData' removes the training data from this dataset.
+    newData            <- plotData[(!as.character(plotData[, siteCol]) %in% plot) & (!plotData[, timeCol] %in% monthYear), ]
   } else {
-    newData <- plotData[(as.character(plotData$site) %in% plot), ]
+    trainingDataSubset <- plotData[(as.character(plotData[, siteCol]) %in% plot) & (plotData[, timeCol] %in% monthYear), ]
+    newData            <- plotData
   }
   
-  test.live <- nrow(newData[(newData$type %in% "LIVE") & (newData$monthYear %in% monthYear), ]) > cutoff
-  test.dead <- nrow(newData[(newData$type %in% "DEAD") & (newData$monthYear %in% monthYear), ]) > cutoff
+  test.live <- nrow(trainingDataSubset[(trainingDataSubset[, typeCol] %in% "LIVE") & (trainingDataSubset[, timeCol]  %in% monthYear), ]) > cutoff
+  test.dead <- nrow(trainingDataSubset[(trainingDataSubset[, typeCol] %in% "DEAD") & (trainingDataSubset[, timeCol]  %in% monthYear), ]) > cutoff
   
-  # generate allometry params (allows multiple months to be combined)  
-  # why doesn't this work?!?!
+  # generate allometry params (allows multiple months to be combined)
   if (test.live) {
-    y.live <- newData$mass[(newData$monthYear %in% monthYear) & (newData$type %in% "LIVE")]
-    x.live <- newData$hgt[(newData$monthYear %in% monthYear) & (newData$type %in% "LIVE")]
+    y.live <- trainingDataSubset[(trainingDataSubset[, timeCol] %in% monthYear) & (trainingDataSubset[, typeCol] %in% "LIVE"), massCol]
+    x.live <- trainingDataSubset[(trainingDataSubset[, timeCol] %in% monthYear) & (trainingDataSubset[, typeCol] %in% "LIVE"), heightCol]
     y.live2 <- y.live[!is.na(y.live) & !is.na(x.live)]
     x.live2 <- x.live[!is.na(y.live) & !is.na(x.live)]
     live.coefs <- coef(model <- nls(y.live2 ~ I(a * x.live2^b), start = list(a = start_nls, 
@@ -696,8 +702,8 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
   #   lines(1:150, y = live.coefs[1] * exp(live.coefs[2] * 1:150))
   
   if (test.dead) {
-    y.dead <- newData$mass[(newData$monthYear %in% monthYear) & (newData$type %in% "DEAD")]
-    x.dead <- newData$hgt[(newData$monthYear %in% monthYear) & (newData$type %in% "DEAD")]
+    y.dead <- trainingDataSubset[(trainingDataSubset[, timeCol]  %in% monthYear) & (trainingDataSubset[, typeCol] %in% "DEAD"), massCol]
+    x.dead <- trainingDataSubset[(trainingDataSubset[, timeCol]  %in% monthYear) & (trainingDataSubset[, typeCol] %in% "DEAD"), heightCol]
     y.dead2 <- y.dead[!is.na(y.dead) & !is.na(x.dead)]
     x.dead2 <- x.dead[!is.na(y.dead) & !is.na(x.dead)]
     dead.coefs <- coef(model <- nls(y.dead2 ~ I(a * x.dead2^b), start = list(a = start_nls, 
@@ -715,69 +721,95 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
   
   # apply allometry from t1 to other time points
   newData$predicted <- NA
-  newData$predicted[newData$type %in% "LIVE"] <- a.live * newData$hgt[newData$type %in% "LIVE"]^b.live
-  newData$predicted[newData$type %in% "DEAD"] <- a.dead * newData$hgt[newData$type %in% "DEAD"]^b.dead
+  newData$predicted[newData[, typeCol] %in% "LIVE"] <- a.live * newData[newData[, typeCol] %in% "LIVE", heightCol]^b.live
+  newData$predicted[newData[, typeCol] %in% "DEAD"] <- a.dead * newData[newData[, typeCol] %in% "DEAD", heightCol]^b.dead
   # error per stem (difference as percent of observed)
-  newData$stem.err <- (newData$predicted - newData$mass) / newData$mass
+  newData$stem.err <- (newData$predicted - newData[, massCol]) / newData[, massCol]
   
-  # for each month, calculate error metrics
-  for (i in 1:length(unique(newData$monthYear))) {
-    targetTime <- unique(newData$monthYear)[i]
-    subData    <- newData[newData$monthYear %in% targetTime, ]
+  
+  ##########
+  # for each site-month-type combination, calculate error metrics
+  # after checking to see if observations exceed cutoff 
+  for (i in 1:length(unique(newData[, timeCol]))) { # for each month
+    targetTime <- unique(newData[, timeCol])[i]
+    subData    <- newData[newData[, timeCol] %in% targetTime, ]
     
-    
-    # this if statement accommodates months where one type of biomass is absent
-    if (test.live) {
-      # error per stem
-      live.stem.err  <- median(subData$stem.err[subData$type %in% "LIVE"], na.rm = T)
-      # error per plot
-      live.mass.obs  <- sum(subData$mass[subData$type %in% "LIVE"], na.rm = T) / plotSize
-      live.mass.pred <- sum(subData$predicted[subData$type %in% "LIVE"], na.rm = T) / plotSize
-      live.err.pct   <- (live.mass.pred - live.mass.obs) / live.mass.obs
-    } else {
-      live.stem.err  <- NA 
-      live.mass.obs  <- NA
-      live.mass.pred <- NA
-      live.err.pct   <- NA
+    for (j in 1:length(unique(subData[, siteCol]))) { # for each site
+      targetSite <- unique(subData[, siteCol])[j]
+      subData2   <- subData[subData[, siteCol] %in% targetSite, ]
+      
+      for (k in 1:length(unique(subData2[, typeCol]))) { # for live/dead
+        targetType <- unique(subData2[, typeCol])[k]
+        subData3   <- subData2[subData2[, typeCol] %in% targetType, ]
+        
+        ### perform main routine ###
+        if(!is.null(subData3)) {
+          intOutput_LD <- data.frame(
+            plot      = targetSite,
+            monthYear = targetTime,
+            type      = targetType,
+            stem.err  = median(subData3$stem.err, na.rm = T),
+            # error per plot
+            mass.obs  = sum(subData3[, massCol], na.rm = T)/ plotSize,
+            mass.pred = sum(subData3$predicted, na.rm = T) / plotSize,
+            err.pct   = (sum(subData3[, massCol], na.rm = T) - sum(subData3$predicted, na.rm = T) ) / sum(subData3[, massCol], na.rm = T)
+          )
+        } else if (is.null(subData3)) {
+          intOutput_LD <- data.frame(
+            plot      = targetSite,
+            monthYear = targetTime,
+            type      = targetType,
+            stem.err  = as.numeric(NA),
+            mass.obs  = as.numeric(NA),
+            mass.pred = as.numeric(NA),
+            err.pct   = as.numeric(NA)
+          )
+        }
+        
+        ### now, merge ###
+        if (k == 1) {
+          output_LD <- intOutput_LD
+        } else {
+          output_LD <- rbind(output_LD, intOutput_LD)
+        }
+      }
+      if (j == 1) {
+        output_site <- output_LD
+      } else {
+        output_site <- rbind(output_site, output_LD)
+      }
     }
-    
-    # do the same for dead biomass
-    if (test.dead) {
-      dead.stem.err  <- median(subData$stem.err[subData$type %in% "DEAD"], na.rm = T)
-      dead.mass.obs  <- sum(subData$mass[subData$type %in% "DEAD"], na.rm = T) / plotSize
-      dead.mass.pred <- sum(subData$predicted[subData$type %in% "DEAD"], na.rm = T) / plotSize
-      dead.err.pct   <- (dead.mass.pred - dead.mass.obs) / dead.mass.obs
+    if (i == 1) {
+      output <- output_site
     } else {
-      dead.stem.err  <- NA 
-      dead.mass.obs  <- NA
-      dead.mass.pred <- NA
-      dead.err.pct   <- NA
+      output <- rbind(output, output_site)
     }
-    
-    
-    # output median, IQR of errors
-    intData <- data.frame(plot            = as.character(plot),
-                          trainingData      = as.character(paste(monthYear, collapse = ",")),
-                          monthYear         = as.character(unique(newData$monthYear)[i]),
-                          stem.err.live     = live.stem.err, # median percent errors on per-stem basis
-                          stem.err.dead     = dead.stem.err,
-                          stem.err.live.IQR = IQR(subData$stem.err[subData$type %in% "LIVE"], na.rm = T),
-                          stem.err.dead.IQR = IQR(subData$stem.err[subData$type %in% "DEAD"], na.rm = T),
-                          plot.err.live     = live.err.pct, # error as a percent of observed (positive nos mean predicted biomass is greater)
-                          plot.err.dead     = dead.err.pct,
-                          obs.biomass.live  = live.mass.obs, # observed biomass
-                          obs.biomass.dead  = dead.mass.obs,
-                          pred.biomass.live = live.mass.pred, # predicted biomass
-                          pred.biomass.dead = dead.mass.pred
-    )
-    
-    if (i != 1) {
-      output <- rbind(output, intData)
-    } else {
-      output <- intData
-    }
-    
   }
+  
+  ##########
+  ### Process output a little bit
+  ### make sure that an absence of biomass has not been interpreted as an absence of sampling
+#   nrow(output) # up to 207
+  for (i in 1:length(unique(output$plot))) {
+    for (j in 1:length(unique(output$monthYear))) {
+      plot    <- unique(output$plot)[i]
+      time    <- unique(output$monthYear)[j]
+      subData <- output[(output$plot %in% plot) & (output$monthYear %in% time), ]
+      if (nrow(subData) == 1) {
+        fillData                     <- subData[1, ]
+        fillData$type                <- ifelse(fillData$type %in% "LIVE", "DEAD", "LIVE")
+        fillData[, 4:ncol(fillData)] <- as.numeric(0)
+        output <- rbind(output, fillData)
+      }
+    }
+    rownames(output) <- 1:nrow(output)
+  }
+#   nrow(output) # up to 5 larger (212)
+  
+  output$year <- paste0("20", substr(as.character(output$monthYear), 5, 6))
+  output <- output[order(output$year, as.yearmon(output$monthYear, moYrFormat)), ]
+  ##########
+  
   
   if (returnData %in% countsAsTrue) {
     if (coefReturn %in% countsAsTrue) {
@@ -802,6 +834,4 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
       output
     }
   }
-  
-  
 }

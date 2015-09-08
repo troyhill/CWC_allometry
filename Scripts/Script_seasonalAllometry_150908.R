@@ -117,7 +117,7 @@ wint13 <- predictBiomass(monthYear = paste0(seasons$wint, c("-13", "-14", "-14")
 
 spr15 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
 sum15 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
-
+head(sum15[[1]])
 
 # estimate NAPP? compare plot biomass estimates?
 ggplot(spr14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alpha = 0.65) +
