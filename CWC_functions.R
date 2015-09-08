@@ -471,12 +471,12 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
                      MilnerHughes = "TRUE", summarize = "FALSE", timeCol = "time") {
   # implements Smalley (1959) and Milner and Hughes (1968)
-  # runs for entire dataset, reports results by year for each site
+  # runs for entire dataset, reports results by year for each plot
   #   dataset = dataframe with your data
   #   liveCol = name of the column with live biomass data
   #   deadCol = name of the column with dead biomass data
   #   yearCol = name of the column with year (4 digits)
-  #   siteCol = name of the column with site name
+  #   siteCol = name of the column with plot name
   #   timeCol = column with time data (in form "%B %Y"). This only matters for the summary statistics, which report peak timing
   #   MilnerHughes      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
   #   summarize = if "TRUE", summary statistics (max NAPP estimates) are reported. TODO: report peak timing

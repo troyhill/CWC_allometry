@@ -106,20 +106,117 @@ for (i in 1:length(seasons)) {
 paramsSite[[1]]
 
 # predict biomass using spring 2014 data pooled from all LUM plots
-spr14 <- predictBiomass(monthYear = paste0(seasons$sprg, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+# seasonalData <- list(
+#   sum13  = predictBiomass(monthYear = paste0(seasons$sumr, c("-13")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#   fall13 = predictBiomass(monthYear = paste0(seasons$sumr, c("-13")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#   wint13 = predictBiomass(monthYear = paste0(seasons$wint, c("-13", "-14", "-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+# 
+#   spr14  = predictBiomass(monthYear = paste0(seasons$sprg, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#   sum14  = predictBiomass(monthYear = paste0(seasons$sumr, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#   fall14 = predictBiomass(monthYear = paste0(seasons$fall, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#   wint14 = predictBiomass(monthYear = paste0(seasons$wint, c("-14", "-15", "-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#     
+#   spr15 = predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05),
+#   sum15 = predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+# )
+
+
+sum13  <- predictBiomass(monthYear = paste0(seasons$sumr, c("-13")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+fall13 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-13")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+wint13 <- predictBiomass(monthYear = paste0(seasons$wint, c("-13", "-14", "-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+
+spr14  <- predictBiomass(monthYear = paste0(seasons$sprg, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
 sum14  <- predictBiomass(monthYear = paste0(seasons$sumr, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
 fall14 <- predictBiomass(monthYear = paste0(seasons$fall, c("-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
 wint14 <- predictBiomass(monthYear = paste0(seasons$wint, c("-14", "-15", "-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
 
-sum13 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-13")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
-fall13 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-13")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
-wint13 <- predictBiomass(monthYear = paste0(seasons$wint, c("-13", "-14", "-14")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+spr15  <- predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
+sum15  <- predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
 
-spr15 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
-sum15 <- predictBiomass(monthYear = paste0(seasons$sumr, c("-15")), plot = c("LUM1", "LUM2", "LUM3"), start_nls = 0.05)
-head(sum15[[1]])
+# combine seasonal estimates into a single dataframe
+sum13[[1]]$trainingSeason  <- "sum13"
+fall13[[1]]$trainingSeason <- "fall13"
+wint13[[1]]$trainingSeason <- "wint13"
 
-# estimate NAPP? compare plot biomass estimates?
+spr14[[1]]$trainingSeason  <- "spr14"
+sum14[[1]]$trainingSeason  <- "sum14"
+fall14[[1]]$trainingSeason <- "fall14"
+wint14[[1]]$trainingSeason <- "wint14"
+
+spr15[[1]]$trainingSeason  <- "spr15"
+sum15[[1]]$trainingSeason  <- "sum15"
+
+seasDat <- rbind(sum13[[1]], rbind(fall13[[1]], rbind(wint13[[1]], rbind(spr14[[1]], rbind(sum14[[1]], rbind(fall14[[1]], rbind(wint14[[1]], rbind(spr15[[1]], sum15[[1]]))))))))
+seasDat <- marshName(seasDat, siteCol = "plot")
+
+
+# convert from long to wide before running nappCalc
+napp <- ddply(seasDat, .(trainingSeason, marsh, plot, monthYear, year), summarise,
+              live.obs = mass.obs[type %in% "LIVE"],
+              dead.obs = mass.obs[type %in% "DEAD"],
+              live.pred = mass.pred[type %in% "LIVE"],
+              dead.pred = mass.pred[type %in% "DEAD"]
+)
+head(napp)
+
+for(i in 1:length(unique(napp$trainingSeason))) {
+  subD <- napp[(napp$trainingSeason %in% unique(napp$trainingSeason)[i]) & (!napp$year %in% 2015), ]
+  temp <- nappCalc(subD, liveCol = "live.obs", deadCol = "dead.obs", siteCol = "plot", timeCol = "monthYear", summarize = "TRUE")[[2]]
+  temp.pred <- nappCalc(subD, liveCol = "live.pred", deadCol = "dead.pred", siteCol = "plot", timeCol = "monthYear", summarize = "TRUE")[[2]]
+  names(temp.pred)[grep("napp", names(temp.pred))] <- paste0("pred.", names(temp.pred)[grep("napp", names(temp.pred))])
+  temp <- cbind(temp, temp.pred[, !names(temp.pred) %in% names(temp)])
+  
+  temp$trainingSeason <- unique(napp$trainingSeason)[i]
+  if (!i == 1) {
+    nappSeas <- rbind(nappSeas, temp)
+  } else {
+    nappSeas <- temp
+  }
+}
+head(nappSeas)
+nappSeas <- marshName(nappSeas)
+
+dd.napp   <- ddply(nappSeas, .(trainingSeason, year, marsh), numcolwise(mean, na.rm = T))
+dd.napp.se   <- ddply(nappSeas, .(trainingSeason, year, marsh), numcolwise(se))
+
+m.napp     <- melt(dd.napp, id.vars = c("marsh", "year", "trainingSeason"))
+m.napp.se  <- melt(dd.napp.se, id.vars = c("marsh", "year", "trainingSeason"))
+m.napp$value.se  <- m.napp.se$value
+
+
+m.napp$class <- "Observed"
+m.napp$class[grep("pred.", m.napp$variable)] <- "Predicted"
+m.napp$variable[grep("pred.", m.napp$variable)] <- gsub("pred.", "", m.napp$variable[grep("pred.", as.character(m.napp$variable))])
+
+
+ggplot(m.napp[(m.napp$year %in% "2014") & (m.napp$marsh %in% "LUM"), ], aes(x = class, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + facet_wrap(~ trainingSeason, ncol = 3, nrow = 3) +
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP14_LUM_byTrainingData.png", width = 8, height= 6, units = "in", dpi = 300)
+
+ggplot(m.napp[(m.napp$year %in% "2013") & (m.napp$marsh %in% "LUM"), ], aes(x = class, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "dodge") + facet_wrap(~ trainingSeason, ncol = 3, nrow = 3) +
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
+                width = 0, position = position_dodge(width = 0.9)) + 
+  labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/NAPP13_LUM_byTrainingData.png", width = 8, height= 6, units = "in", dpi = 300)
+
+
+
+
+
+
+
+
+### exploratory plots
 ggplot(spr14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alpha = 0.65) +
   theme_bw() + facet_grid(type ~ .) + labs(title = "Training data: Spring 2014") +
   ylim(-2, 7) 
@@ -137,4 +234,6 @@ ggplot(wint14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alp
   ylim(-2, 7) 
 
 
-# predictBiomass[[1]] is supposed to be a plot-scale summary, but doesn't work when multiple times or plots are used in training data
+
+
+
