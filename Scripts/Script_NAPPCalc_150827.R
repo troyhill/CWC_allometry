@@ -73,13 +73,7 @@ plotSize <- 0.25^ 2
 hist(cwc$hgt) # verify 150 cm stem? maybe even 130+ cm stems
 hist(cwc$mass) # 10 grams? 
 
-# to check:
-cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), ] # very odd; tiny stem, large mass tin 2131
-cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), c("mass", "hgt")] <- NA # remove for now
-cwc[cwc$monthYear %in% "Jan-14",]                    # very noisy data
-plot(cwc$mass[cwc$monthYear %in% "Jun-14"] ~ cwc$hgt[cwc$monthYear %in% "Jun-14"])
-plot(cwc$mass[cwc$monthYear %in% "Jan-14"] ~ cwc$hgt[cwc$monthYear %in% "Jan-14"])
-#####
+
 
 
 

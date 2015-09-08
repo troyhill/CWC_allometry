@@ -30,9 +30,6 @@ dat <- lapply(filenames, read.delim)
 
 # Calculate allometric parameters and data
 data14 <- batch(inputList = dat, fun = getAllometryParams, returnData = "TRUE")
-head(data14[[2]])
-data14[[2]]$ID <- as.character(data14[[2]]$ID)
-
 
 
 #####
@@ -43,7 +40,6 @@ data14[[2]]$ID <- as.character(data14[[2]]$ID)
 directory <- "C:/RDATA/SPAL_allometry/data_LUM123/"
 filenames <- paste0(directory, list.files(directory, pattern = "2013.txt"))
 rawData2013 <- lapply(filenames, read.delim, skip = 3) 
-head(rawData2013[[1]])
 
 # get plot names (this isn't in all data files)
 sites <- substr(filenames, 42, nchar(filenames) - 9)
@@ -88,15 +84,14 @@ cwc <- rbind(data13, data14[[2]])
 
 # add marsh name
 cwc <- marshName(cwc)
-# for (i in 1:nrow(cwc)) {
-#   if (cwc$site[i] %in% paste0("LUM", 1:3)) {
-#     cwc$marsh[i] <- "LUM"    
-#   } else if (cwc$site[i] %in% c("TB1", "TB2")) {
-#     cwc$marsh[i] <- "TB-A"
-#   } else if (cwc$site[i] %in% c("TB3", "TB4")) {
-#     cwc$marsh[i] <- "TB-B"
-#   }
-# }
+
+# samples to check:
+cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), ] # very odd; tiny stem, large mass tin 2131
+cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), c("mass", "hgt")] <- NA # remove for now
+cwc[cwc$monthYear %in% "Jan-14",]                    # very noisy data
+plot(cwc$mass[cwc$monthYear %in% "Jun-14"] ~ cwc$hgt[cwc$monthYear %in% "Jun-14"])
+plot(cwc$mass[cwc$monthYear %in% "Jan-14"] ~ cwc$hgt[cwc$monthYear %in% "Jan-14"])
+#####
 
 
 ### remove "bag scrap" samples
@@ -126,6 +121,8 @@ for (i in 1:length(months)) {
 
 # merged allometric parameters
 cwc.params <- rbind(params2013, data14[[1]]) 
+
+
 
 
 

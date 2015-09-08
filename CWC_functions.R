@@ -4,22 +4,46 @@ library(zoo)
 marshName <- function(data, siteCol = "site") {
   # function takes a dataset and the name of the column with site names (e.g., "LUM1"), and 
   # adds a column with marsh names ("LUM", "TB-A", "TB-B")
-    tempData <- data
-    tempData$marsh <- NA
-    for (i in 1:nrow(tempData)) {
-      if (tempData[, siteCol][i] %in% paste0("LUM", 1:3)) {
-        tempData$marsh[i] <- "LUM"    
-      } else if (tempData[, siteCol][i] %in% c("TB1", "TB2")) {
-        tempData$marsh[i] <- "TB-A"
-      } else if (tempData[, siteCol][i] %in% c("TB3", "TB4")) {
-        tempData$marsh[i] <- "TB-B"
-      }
+  tempData <- data
+  tempData$marsh <- NA
+  for (i in 1:nrow(tempData)) {
+    if (tempData[, siteCol][i] %in% paste0("LUM", 1:3)) {
+      tempData$marsh[i] <- "LUM"    
+    } else if (tempData[, siteCol][i] %in% c("TB1", "TB2")) {
+      tempData$marsh[i] <- "TB-A"
+    } else if (tempData[, siteCol][i] %in% c("TB3", "TB4")) {
+      tempData$marsh[i] <- "TB-B"
     }
-    tempData
+  }
+  tempData
 }
 
+
+batch <- function (inputList, fun, ...) {
+  # function allows batch analysis of a list of dataframes. Output is a dataframe of results
+  fun <- match.fun(fun)
+  for(j in 1:length(inputList)) {
+    a <- fun(inputList[[j]], ...)
+    if (j != 1) {
+      if (is.list(a)) {
+        outputObj <- mapply(rbind, outputObj, a, SIMPLIFY = FALSE)
+      } else {
+        outputObj <- rbind(outputObj, a)
+      }
+    } else {
+      outputObj <- a
+    }
+  }
+  if (is.list(a)) {
+    rownames(outputObj[[2]]) <- 1:nrow(outputObj[[2]])
+  }
+  outputObj
+}
+
+
+
 proc_CWC_files <- function (dataset, 
-                           ExcelParameterFile = "C:/RDATA/SPAL_allometry/data_LUM123/data_CWC_oldCoeffs_150821.txt") {
+                            ExcelParameterFile = "C:/RDATA/SPAL_allometry/data_LUM123/data_CWC_oldCoeffs_150821.txt") {
   # function returns parameters for exponential fits (and diagnostic plots, saved to working directory)
   # file structure changed in May 2015...
   if (names(dataset)[13] %in% "Total.Dried.Plant.Weight") {  
@@ -34,7 +58,7 @@ proc_CWC_files <- function (dataset,
                            LUM1.R.coef = I(NA))
   
   
-    
+  
   for (i in 1:length(grep("LUM", levels(dataset$site)))) {
     x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE")) & (dataset$site %in% c(paste0("LUM", i), paste0("LUM ", i)))]
     y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE")) & (dataset$site %in% c(paste0("LUM", i), paste0("LUM ", i)))]
@@ -42,14 +66,14 @@ proc_CWC_files <- function (dataset,
     test       <- data.frame(xVals = 1:max(x))
     test$yVals <- coefs[1] * exp(coefs[2] * test$xVals)
     plotname   <- paste0("LUM", i, "-", moYr)
-
+    
     png(filename = paste0(plotname, ".png"), width = 10, height = 8, units = "cm", res = 200)
-      par(mar = c(4, 4, 0.3, 0.5), fig = c(0,1,0,1))
-      plot(y ~ x, cex = 0.6, pch = 19, 
-           xlab = "stem height (cm)",
-           ylab = "stem mass (g)")
-      text(x = as.numeric(quantile(na.omit(x), 0.4)), y = as.numeric(quantile(na.omit(y), 0.8)), labels = plotname)
-      lines(y = test$yVals, x = test$xVals)
+    par(mar = c(4, 4, 0.3, 0.5), fig = c(0,1,0,1))
+    plot(y ~ x, cex = 0.6, pch = 19, 
+         xlab = "stem height (cm)",
+         ylab = "stem mass (g)")
+    text(x = as.numeric(quantile(na.omit(x), 0.4)), y = as.numeric(quantile(na.omit(y), 0.8)), labels = plotname)
+    lines(y = test$yVals, x = test$xVals)
     dev.off()
     
     # calculate diagnostics
@@ -105,7 +129,7 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
   if (length(sitesIncluded) != 1) {
     stop ("`sitesIncluded` argument should have one entry. Acceptable entries: `all`, `LUM`, `TB`")
   }
-   if (!returnData %in% c(countsAsTrue, countsAsFalse)) {
+  if (!returnData %in% c(countsAsTrue, countsAsFalse)) {
     stop ("`returnData` argument is erroneous. Acceptable entries: `TRUE` or `FALSE`")
   }
   if (length(returnData) != 1) {
@@ -135,14 +159,16 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
   # homogenize inconsistent labeling
   dataset$site <- as.factor(gsub(pattern = " ", replacement = "", x = dataset$site))
   dataset$type <- as.character(dataset$type)
+  dataset$ID   <- as.character(dataset$ID)
+  dataset$time <- as.character(dataset$time)
   
   # find month (robust to datasets spanning multiple months)
   mo <- paste(paste(as.character(grep(paste(c(unique(substr(dataset$time, 1, 3))), collapse = "|"), month.abb))), 
-          collapse = " ")
+              collapse = " ")
   # year reports all years covered by a dataset; specific year-month combinations are reported by moYr
   da <- paste0(paste0("20", unique(as.character(substr(dataset$time, 5, 6)))), collapse = " ")
   moYr <- paste0(unique(as.character(dataset$time)), collapse = " ")
-
+  
   # check site exclusion flag
   if ((sitesIncluded %in% "all") & (combinePlots %in% countsAsFalse)) {
     plotsInData <- levels(dataset$site)[levels(dataset$site) %in% c(TB.sites, LUM.sites)]
@@ -175,116 +201,116 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     )   
   } else {
     
-  # determine how many plots are included
-  siteOnly <- unlist(strsplit(as.character(dataset$site), split = c("[1-9]")))
-  sitesInData <- unique(siteOnly)
-
-  # set number of rows in allometry parameter file
-  # if all sites are selected, this step begins to combine  their data
-  if ((combinePlots %in% countsAsTrue) & (sitesIncluded %in% "all")) {
-    n <- 1
-  } else if ((combinePlots %in% countsAsTrue) & (!sitesIncluded %in% "all")) {
-    n <- 1
-  } else {
-    n <- length(plotsInData) 
-  }
-  
-  returnVals <- data.frame(monthYear = rep(moYr, times = n), 
-                           month = rep(mo, times = n), year = rep(da, times = n),
-                           site = rep(NA, times = n), plot = rep(NA, times = n),
-                           coef.live = rep(as.numeric(NA), times = n), exp.live = rep(as.numeric(NA), times = n), # y = coef * e^(exp * b)
-                           MSE.live = rep(as.numeric(NA), times = n), r.live = rep(as.numeric(NA), times = n),    # diagnostics
-                           coef.dead = rep(as.numeric(NA), times = n), exp.dead = rep(as.numeric(NA), times = n), 
-                           MSE.dead = rep(as.numeric(NA), times = n), r.dead = rep(as.numeric(NA), times = n)
-                           )    
-  
-  for (i in 1:n) {
+    # determine how many plots are included
+    siteOnly <- unlist(strsplit(as.character(dataset$site), split = c("[1-9]")))
+    sitesInData <- unique(siteOnly)
     
-    if (combinePlots %in% countsAsTrue) {
-      siteName <- strsplit(plotsInData, " ")[[1]]
-    }  else {
-      siteName <- plotsInData[i]
-    }
-    
-    if ((length(sitesInData) > 1) & (combinePlots %in% countsAsTrue)) {
-      returnVals$site[i] <- paste0(sitesInData, collapse = " ")
-    } else {
-      returnVals$site[i] <- strsplit(as.character(unique(dataset$site)), split = c("[1-9]| "))[[i]][1] # "LUM" or "TB"
-    }
-    
-    # `plot` reports `sitesIncluded` if data are being combined across plots
-    if (combinePlots %in% countsAsFalse) {
-      returnVals$plot[i]  <- plotsInData[i]
-    } else if ((combinePlots %in% countsAsTrue) & (sitesIncluded %in% "all")) {
-      returnVals$plot[i]  <- plotsInData[i]
+    # set number of rows in allometry parameter file
+    # if all sites are selected, this step begins to combine  their data
+    if ((combinePlots %in% countsAsTrue) & (sitesIncluded %in% "all")) {
+      n <- 1
     } else if ((combinePlots %in% countsAsTrue) & (!sitesIncluded %in% "all")) {
-      returnVals$plot[i] <-  returnVals$site[i]
-    }
-    
-    ### data subset by type
-    x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
-    y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
-    x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
-    y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
-    
-### This didn't work, not sure why
-#     if one x-vector has length zero but the other doesn't, it means the plot was sampled and 
-#     both types should be in the data (if data is returned by function)
-#     if (returnData %in% countsAsTrue) {
-#       # if one type has data but the other doesn't insert 0s in dataset (because plot was sampled)
-#       if ((length(x) == 0) & (length(x.dead) != 0)) { 
-#         fillData <- dataset[1, ]
-#         fillData$type <- "LIVE"
-#         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
-#         fillData$hgt <- fillData$mass <- as.numeric(0)
-#         dataset <- rbind(dataset, fillData)
-#       } else if ((length(x.dead) == 0) & (length(x) != 0)) {
-#         fillData <- dataset[1, ]
-#         fillData$type <- "DEA"
-#         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
-#         fillData$hgt <- fillData$mass <- as.numeric(0)
-#         dataset <- rbind(dataset, fillData)
-#         }
-#     }
-###
-    
-    
-    if (length(x) < 2) {
-      returnVals$coef.live[i] <- as.numeric(NA)
-      returnVals$exp.live[i]  <- as.numeric(NA)
-      returnVals$MSE.live[i]  <- as.numeric(NA)
-      returnVals$r.live[i]    <- as.numeric(NA)
+      n <- 1
     } else {
-      coefs      <- coef(model <- nls(y ~ I(a * exp(b * x)), start = list(a = 0.1, b = 0.1)))
-      predicted           <- coefs[1] * exp(coefs[2] * x)
-      squared_error       <- (predicted - y)^2
-      returnVals$coef.live[i] <- coefs[1]
-      returnVals$exp.live[i]  <- coefs[2]
-      returnVals$MSE.live[i]  <- sum(squared_error, na.rm = T)
-      returnVals$r.live[i]    <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
+      n <- length(plotsInData) 
     }
     
-    # do the same for dead stems, if there's more than two stems
-    if (length(dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]) > 2) {
+    returnVals <- data.frame(monthYear = rep(moYr, times = n), 
+                             month = rep(mo, times = n), year = rep(da, times = n),
+                             site = rep(NA, times = n), plot = rep(NA, times = n),
+                             coef.live = rep(as.numeric(NA), times = n), exp.live = rep(as.numeric(NA), times = n), # y = coef * e^(exp * b)
+                             MSE.live = rep(as.numeric(NA), times = n), r.live = rep(as.numeric(NA), times = n),    # diagnostics
+                             coef.dead = rep(as.numeric(NA), times = n), exp.dead = rep(as.numeric(NA), times = n), 
+                             MSE.dead = rep(as.numeric(NA), times = n), r.dead = rep(as.numeric(NA), times = n)
+    )    
+    
+    for (i in 1:n) {
+      
+      if (combinePlots %in% countsAsTrue) {
+        siteName <- strsplit(plotsInData, " ")[[1]]
+      }  else {
+        siteName <- plotsInData[i]
+      }
+      
+      if ((length(sitesInData) > 1) & (combinePlots %in% countsAsTrue)) {
+        returnVals$site[i] <- paste0(sitesInData, collapse = " ")
+      } else {
+        returnVals$site[i] <- sapply(strsplit(as.character(unique(dataset$site)), "[1-9]| "), head, n = 1)[1] # old version: strsplit(as.character(unique(dataset$site)), split = c("[1-9]| "))[[i]][1] # "LUM" or "TB"
+      }
+      
+      # `plot` reports `sitesIncluded` if data are being combined across plots
+      if (combinePlots %in% countsAsFalse) {
+        returnVals$plot[i]  <- plotsInData[i]
+      } else if ((combinePlots %in% countsAsTrue) & (sitesIncluded %in% "all")) {
+        returnVals$plot[i]  <- plotsInData[i]
+      } else if ((combinePlots %in% countsAsTrue) & (!sitesIncluded %in% "all")) {
+        returnVals$plot[i] <-  returnVals$site[i]
+      }
+      
+      ### data subset by type
+      x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
+      y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
+      x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
+      y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
+      
+      ### This didn't work, not sure why
+      #     if one x-vector has length zero but the other doesn't, it means the plot was sampled and 
+      #     both types should be in the data (if data is returned by function)
+      #     if (returnData %in% countsAsTrue) {
+      #       # if one type has data but the other doesn't insert 0s in dataset (because plot was sampled)
+      #       if ((length(x) == 0) & (length(x.dead) != 0)) { 
+      #         fillData <- dataset[1, ]
+      #         fillData$type <- "LIVE"
+      #         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
+      #         fillData$hgt <- fillData$mass <- as.numeric(0)
+      #         dataset <- rbind(dataset, fillData)
+      #       } else if ((length(x.dead) == 0) & (length(x) != 0)) {
+      #         fillData <- dataset[1, ]
+      #         fillData$type <- "DEA"
+      #         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
+      #         fillData$hgt <- fillData$mass <- as.numeric(0)
+      #         dataset <- rbind(dataset, fillData)
+      #         }
+      #     }
+      ###
+      
+      
+      if (length(x) < 2) {
+        returnVals$coef.live[i] <- as.numeric(NA)
+        returnVals$exp.live[i]  <- as.numeric(NA)
+        returnVals$MSE.live[i]  <- as.numeric(NA)
+        returnVals$r.live[i]    <- as.numeric(NA)
+      } else {
+        coefs      <- coef(model <- nls(y ~ I(a * exp(b * x)), start = list(a = 0.1, b = 0.1)))
+        predicted           <- coefs[1] * exp(coefs[2] * x)
+        squared_error       <- (predicted - y)^2
+        returnVals$coef.live[i] <- coefs[1]
+        returnVals$exp.live[i]  <- coefs[2]
+        returnVals$MSE.live[i]  <- sum(squared_error, na.rm = T)
+        returnVals$r.live[i]    <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
+      }
+      
+      # do the same for dead stems, if there's more than two stems
+      if (length(dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]) > 2) {
         if (length(x.dead) < 2) {
           returnVals$coef.dead[i] <- as.numeric(NA)
           returnVals$exp.dead[i]  <- as.numeric(NA)
           returnVals$MSE.dead[i]  <- as.numeric(NA)
           returnVals$r.dead[i]    <- as.numeric(NA)
         } else {
-        coefs.dead <- coef(model.dead <- nls(y.dead ~ I(a * exp(b * x.dead)), start = list(a = 0.1, b = 0.1)))
-        
-        predicted.dead      <- coefs.dead[1] * exp(coefs.dead[2] * x.dead)
-        squared_error.dead  <- (predicted.dead - y.dead)^2
-        
-        
-        returnVals$coef.dead[i] <- coefs.dead[1]
-        returnVals$exp.dead[i]  <- coefs.dead[2]
-        returnVals$MSE.dead[i]  <- sum(squared_error.dead, na.rm = T)
-        returnVals$r.dead[i]    <- sqrt(1 - (deviance(model.dead)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2)))
+          coefs.dead <- coef(model.dead <- nls(y.dead ~ I(a * exp(b * x.dead)), start = list(a = 0.1, b = 0.1)))
+          
+          predicted.dead      <- coefs.dead[1] * exp(coefs.dead[2] * x.dead)
+          squared_error.dead  <- (predicted.dead - y.dead)^2
+          
+          
+          returnVals$coef.dead[i] <- coefs.dead[1]
+          returnVals$exp.dead[i]  <- coefs.dead[2]
+          returnVals$MSE.dead[i]  <- sum(squared_error.dead, na.rm = T)
+          returnVals$r.dead[i]    <- sqrt(1 - (deviance(model.dead)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2)))
         } 
+      }
     }
-  }
   }
   if (returnData %in% countsAsFalse) {
     returnVals
@@ -294,41 +320,18 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
 }
 
 
-batch <- function (inputList, fun, ...) {
-  # function allows batch analysis of a list of dataframes. Output is a dataframe of results
-  fun <- match.fun(fun)
-  for(j in 1:length(inputList)) {
-    a <- fun(inputList[[j]], ...)
-    if (j != 1) {
-      if (is.list(a)) {
-        outputObj <- mapply(rbind, outputObj, a, SIMPLIFY = FALSE)
-      } else {
-        outputObj <- rbind(outputObj, a)
-      }
-    } else {
-      outputObj <- a
-    }
-  }
-  if (is.list(a)) {
-    rownames(outputObj[[2]]) <- 1:nrow(outputObj[[2]])
-  }
-  outputObj
-}
-
-
-
 
 plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
   procData <- getAllometryParams(dataset = monthlyData, returnData = "TRUE", sitesIncluded = site)
   
   living <- c("Live", "coef.live", "exp.live", "live")
   dying <- c("Dead", "coef.dead", "exp.dead", "dead")
-
+  
   if (save %in% c("TRUE", "True", "true", "T")) {
     png(filename = paste0("Allom-", procData[[2]]$time, ".png"), width = 15, height = 8, units = "cm", res = 300)
   }
   if (type %in% c("live", "Live", "LIVE", "both", "Both", "BOTH")) {
-     if (type %in% c("both", "Both", "BOTH"))  {
+    if (type %in% c("both", "Both", "BOTH"))  {
       par(mar = c(4, 4, 0.3, 0.5), fig = c(0, 0.48, 0, 1))
     } else if (!type %in% c("both", "Both", "BOTH")) {
       par(mar = c(4, 4, 0.3, 0.5), fig = c(0, 1, 0, 1))
@@ -346,7 +349,7 @@ plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
       max.x <- max(procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% living[1])], na.rm = T)
       xVals <- c((min.x * 100):(max.x * 100)) / 100
       modeled <- procData[[1]][paste0("coef.", living[4])][[1]][i] * exp(procData[[1]][paste0("exp.", living[4])][[1]][i] *
-                                                    xVals)
+                                                                           xVals)
       lines(x = xVals, y = modeled, lty = i)
     }
     legend(x = 1.1 * min(procData[[2]]$hgt, na.rm = T), y = 0.7 * max(procData[[2]]$mass, na.rm = T), 
@@ -376,7 +379,7 @@ plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
       max.x <- max(procData[[2]]$hgt[(procData[[2]]$site %in% procData[[1]]$plot[i]) & (procData[[2]]$type %in% dying[1])], na.rm = T)
       xVals <- c((min.x * 100):(max.x * 100)) / 100
       modeled <- procData[[1]][paste0("coef.", dying[4])][[1]][i] * 
-                  exp(procData[[1]][paste0("exp.", dying[4])][[1]][i] * xVals)
+        exp(procData[[1]][paste0("exp.", dying[4])][[1]][i] * xVals)
       lines(x = xVals, y = modeled, lty = i)
     }
     legend(x = 1.1 * min(procData[[2]]$hgt, na.rm = T), y = 0.7 * max(procData[[2]]$mass, na.rm = T), 
@@ -463,7 +466,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
-                          MilnerHughes = "TRUE", summarize = "FALSE", timeCol = "time") {
+                     MilnerHughes = "TRUE", summarize = "FALSE", timeCol = "time") {
   # implements Smalley (1959) and Milner and Hughes (1968)
   # runs for entire dataset, reports results by year for each site
   #   dataset = dataframe with your data
@@ -544,10 +547,10 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       }
       
       # apply decision rules
-        # both increments positive: sum of both
-        # both negative: zero
-        # live + and dead -: use live
-        # live - and dead +: difference (if positive, otherwise use zero)
+      # both increments positive: sum of both
+      # both negative: zero
+      # live + and dead -: use live
+      # live - and dead +: difference (if positive, otherwise use zero)
       if ((subData1[, live.inc][j] > 0) & (subData1[, dead.inc][j] > 0)) {
         newVal <- subData1[, live.inc][j] + subData1[, dead.inc][j]
       } else if ((subData1[, live.inc][j] <= 0) & (subData1[, dead.inc][j] <= 0)) {
@@ -568,37 +571,37 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       tempData[tempData[, siteCol] %in% targetSite, eV][j]          <- subData1[, eV][j]
       tempData[tempData[, siteCol] %in% targetSite, smalley.inc][j] <- newVal
     }
+    
+    # now, calculate NAPP cumulatively for each year
+    # treat NAs as zeroes in NAPP calculation
+    for (k in 1:length(unique(subData1[, yearCol]))) {
+      targetYear <- unique(subData1[, yearCol])[k]
+      # data for a single site, single year
+      subData2   <- tempData[(tempData[, yearCol] %in% targetYear) & (tempData[, siteCol] %in% targetSite), ]
       
-  # now, calculate NAPP cumulatively for each year
-  # treat NAs as zeroes in NAPP calculation
-  for (k in 1:length(unique(subData1[, yearCol]))) {
-    targetYear <- unique(subData1[, yearCol])[k]
-    # data for a single site, single year
-    subData2   <- tempData[(tempData[, yearCol] %in% targetYear) & (tempData[, siteCol] %in% targetSite), ]
-    
-    # sum smalley increments
-    subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
-    
-    # sum positive biomass increments for Millner & Hughes 1968
-    subData2[, "MH.inc"] <- subData2[, live.inc] + subData2[, dead.inc]
-    # use only positive increments to calc MH NAPP
-    subData2[, "MH.inc"][subData2[, "MH.inc"] < 0] <- 0
-    subData2[, MH][!is.na(subData2[, "MH.inc"])] <- cumsum(subData2[, "MH.inc"][!is.na(subData2[, "MH.inc"])])
-    
-    # sum e from Valiela, Teal, Sass 1975
-    subData2[, VTS][!is.na(subData2[, eV])] <- cumsum(subData2[, eV][!is.na(subData2[, eV])])
+      # sum smalley increments
+      subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
       
-    # sum peak standing crop increments
-    subData2[, PSC_A][!is.na(subData2[, liveCol])]                       <- cummax(subData2[, liveCol][!is.na(subData2[, liveCol])])
-    subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- cummax(c(subData2[, liveCol] + subData2[, deadCol])[!is.na(c(subData2[, liveCol] + subData2[, deadCol]))])
-    
-    
-    # add to output dataframe
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley]  <- subData2[, smalley]
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]       <- subData2[, MH]
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_A]    <- subData2[, PSC_A]
-    tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_B]    <- subData2[, PSC_B]
+      # sum positive biomass increments for Millner & Hughes 1968
+      subData2[, "MH.inc"] <- subData2[, live.inc] + subData2[, dead.inc]
+      # use only positive increments to calc MH NAPP
+      subData2[, "MH.inc"][subData2[, "MH.inc"] < 0] <- 0
+      subData2[, MH][!is.na(subData2[, "MH.inc"])] <- cumsum(subData2[, "MH.inc"][!is.na(subData2[, "MH.inc"])])
+      
+      # sum e from Valiela, Teal, Sass 1975
+      subData2[, VTS][!is.na(subData2[, eV])] <- cumsum(subData2[, eV][!is.na(subData2[, eV])])
+      
+      # sum peak standing crop increments
+      subData2[, PSC_A][!is.na(subData2[, liveCol])]                       <- cummax(subData2[, liveCol][!is.na(subData2[, liveCol])])
+      subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- cummax(c(subData2[, liveCol] + subData2[, deadCol])[!is.na(c(subData2[, liveCol] + subData2[, deadCol]))])
+      
+      
+      # add to output dataframe
+      tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley]  <- subData2[, smalley]
+      tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]       <- subData2[, MH]
+      tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
+      tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_A]    <- subData2[, PSC_A]
+      tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_B]    <- subData2[, PSC_B]
     }
   }
   
@@ -613,18 +616,18 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
         subData2   <- subData1[subData1[, yearCol] %in% targetYear, ] 
         
         intData <- data.frame(
-        site = targetSite, 
-        year = targetYear,
-        napp.smalley = max(subData2[, smalley], na.rm = T), 
-        napp.MH      = max(subData2[, MH], na.rm = T), 
-        napp.VTS     = max(subData2[, VTS], na.rm = T), 
-        napp.psc.a   = max(subData2[, PSC_A], na.rm = T), 
-        napp.psc.b   = max(subData2[, PSC_B], na.rm = T), 
-        t.smalley    = ifelse(is.finite(max(subData2[, smalley], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, smalley])]), NA),
-        t.MH         = ifelse(is.finite(max(subData2[, MH], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, MH])]), NA),
-        t.vts        = as.character(subData2[, timeCol][which.max(subData2[, VTS])]),
-        t.psc.a      = as.character(subData2[, timeCol][which.max(subData2[, PSC_A])]),
-        t.psc.b      = as.character(subData2[, timeCol][which.max(subData2[, PSC_B])])
+          site = targetSite, 
+          year = targetYear,
+          napp.smalley = max(subData2[, smalley], na.rm = T), 
+          napp.MH      = max(subData2[, MH], na.rm = T), 
+          napp.VTS     = max(subData2[, VTS], na.rm = T), 
+          napp.psc.a   = max(subData2[, PSC_A], na.rm = T), 
+          napp.psc.b   = max(subData2[, PSC_B], na.rm = T), 
+          t.smalley    = ifelse(is.finite(max(subData2[, smalley], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, smalley])]), NA),
+          t.MH         = ifelse(is.finite(max(subData2[, MH], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, MH])]), NA),
+          t.vts        = as.character(subData2[, timeCol][which.max(subData2[, VTS])]),
+          t.psc.a      = as.character(subData2[, timeCol][which.max(subData2[, PSC_A])]),
+          t.psc.b      = as.character(subData2[, timeCol][which.max(subData2[, PSC_B])])
         )
         
         if (i != 1 ) {
@@ -645,5 +648,160 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
 
 
 
-
-
+predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25, 
+                           removeTrainingData = "FALSE", returnData = "TRUE", start_nls = 0.03,
+                           coefReturn = "FALSE", cutoff = 5) {
+  # note 150907: changed to y = a*x^b and monthly data
+  # function to apply allometry to other time points (same plot). Generates a residual (observed - predicted)
+  # allometryData:  object with allometry parameters (cwc.params)
+  # plotData:       object with plot data on plant heights and masses (cwc)
+  # summaryData:    data with total biomass per plot, per time interval (maybe not needed)
+  # monthYear:      month and year to use for estimating biomass. monthYear should be of the form, e.g., "May-13" for May 2013
+  # plot:           which plot's data will be used
+  # removeTrainingData: determines whether training data should also be modeled
+  # returnData:     indicates whether predicted is returned by the function
+  #   
+  #   plotData      <- cwc
+  #   summaryData   <- CWC.plots # plot.totals has combined live/dead, CWC.plots distinguishes live/dead
+  
+  # TODO: add site name to coef dataframe
+  
+  countsAsTrue <- c("TRUE", "true", "T", "True")
+  plotSize     <- quadrat^2
+  
+  # isolate plot x's data (and exclude month(s) used to parameterize model, if desired)
+  if (removeTrainingData %in% countsAsTrue) {
+    newData <- plotData[(as.character(plotData$site) %in% plot) & (!plotData$monthYear %in% monthYear), ]
+  } else {
+    newData <- plotData[(as.character(plotData$site) %in% plot), ]
+  }
+  
+  test.live <- nrow(newData[(newData$type %in% "LIVE") & (newData$monthYear %in% monthYear), ]) > cutoff
+  test.dead <- nrow(newData[(newData$type %in% "DEAD") & (newData$monthYear %in% monthYear), ]) > cutoff
+  
+  # generate allometry params (allows multiple months to be combined)  
+  # why doesn't this work?!?!
+  if (test.live) {
+    y.live <- newData$mass[(newData$monthYear %in% monthYear) & (newData$type %in% "LIVE")]
+    x.live <- newData$hgt[(newData$monthYear %in% monthYear) & (newData$type %in% "LIVE")]
+    y.live2 <- y.live[!is.na(y.live) & !is.na(x.live)]
+    x.live2 <- x.live[!is.na(y.live) & !is.na(x.live)]
+    live.coefs <- coef(model <- nls(y.live2 ~ I(a * x.live2^b), start = list(a = start_nls, 
+                                                                             b = start_nls)))
+  } else {
+    live.coefs <- c(NA, NA)
+  }
+  # force through zero?
+  #   plot(y.live2 ~ x.live2)
+  #   lines(1:150, y = live.coefs[1] * exp(live.coefs[2] * 1:150))
+  
+  if (test.dead) {
+    y.dead <- newData$mass[(newData$monthYear %in% monthYear) & (newData$type %in% "DEAD")]
+    x.dead <- newData$hgt[(newData$monthYear %in% monthYear) & (newData$type %in% "DEAD")]
+    y.dead2 <- y.dead[!is.na(y.dead) & !is.na(x.dead)]
+    x.dead2 <- x.dead[!is.na(y.dead) & !is.na(x.dead)]
+    dead.coefs <- coef(model <- nls(y.dead2 ~ I(a * x.dead2^b), start = list(a = start_nls, 
+                                                                             b = start_nls)))
+  } else {
+    dead.coefs <- c(NA, NA)
+  }
+  #   plot(y.dead2 ~ x.dead2)
+  #   lines(1:150, y = dead.coefs[1] * exp(dead.coefs[2] * 1:150))
+  
+  a.live <- live.coefs[1]
+  b.live <- live.coefs[2]
+  a.dead <- dead.coefs[1]    # coef
+  b.dead <- dead.coefs[2]
+  
+  # apply allometry from t1 to other time points
+  newData$predicted <- NA
+  newData$predicted[newData$type %in% "LIVE"] <- a.live * newData$hgt[newData$type %in% "LIVE"]^b.live
+  newData$predicted[newData$type %in% "DEAD"] <- a.dead * newData$hgt[newData$type %in% "DEAD"]^b.dead
+  # error per stem (difference as percent of observed)
+  newData$stem.err <- (newData$predicted - newData$mass) / newData$mass
+  
+  # for each month, calculate error metrics
+  for (i in 1:length(unique(newData$monthYear))) {
+    targetTime <- unique(newData$monthYear)[i]
+    subData    <- newData[newData$monthYear %in% targetTime, ]
+    
+    
+    # this if statement accommodates months where one type of biomass is absent
+    if (test.live) {
+      # error per stem
+      live.stem.err  <- median(subData$stem.err[subData$type %in% "LIVE"], na.rm = T)
+      # error per plot
+      live.mass.obs  <- sum(subData$mass[subData$type %in% "LIVE"], na.rm = T) / plotSize
+      live.mass.pred <- sum(subData$predicted[subData$type %in% "LIVE"], na.rm = T) / plotSize
+      live.err.pct   <- (live.mass.pred - live.mass.obs) / live.mass.obs
+    } else {
+      live.stem.err  <- NA 
+      live.mass.obs  <- NA
+      live.mass.pred <- NA
+      live.err.pct   <- NA
+    }
+    
+    # do the same for dead biomass
+    if (test.dead) {
+      dead.stem.err  <- median(subData$stem.err[subData$type %in% "DEAD"], na.rm = T)
+      dead.mass.obs  <- sum(subData$mass[subData$type %in% "DEAD"], na.rm = T) / plotSize
+      dead.mass.pred <- sum(subData$predicted[subData$type %in% "DEAD"], na.rm = T) / plotSize
+      dead.err.pct   <- (dead.mass.pred - dead.mass.obs) / dead.mass.obs
+    } else {
+      dead.stem.err  <- NA 
+      dead.mass.obs  <- NA
+      dead.mass.pred <- NA
+      dead.err.pct   <- NA
+    }
+    
+    
+    # output median, IQR of errors
+    intData <- data.frame(plot            = as.character(plot),
+                          trainingData      = as.character(paste(monthYear, collapse = ",")),
+                          monthYear         = as.character(unique(newData$monthYear)[i]),
+                          stem.err.live     = live.stem.err, # median percent errors on per-stem basis
+                          stem.err.dead     = dead.stem.err,
+                          stem.err.live.IQR = IQR(subData$stem.err[subData$type %in% "LIVE"], na.rm = T),
+                          stem.err.dead.IQR = IQR(subData$stem.err[subData$type %in% "DEAD"], na.rm = T),
+                          plot.err.live     = live.err.pct, # error as a percent of observed (positive nos mean predicted biomass is greater)
+                          plot.err.dead     = dead.err.pct,
+                          obs.biomass.live  = live.mass.obs, # observed biomass
+                          obs.biomass.dead  = dead.mass.obs,
+                          pred.biomass.live = live.mass.pred, # predicted biomass
+                          pred.biomass.dead = dead.mass.pred
+    )
+    
+    if (i != 1) {
+      output <- rbind(output, intData)
+    } else {
+      output <- intData
+    }
+    
+  }
+  
+  if (returnData %in% countsAsTrue) {
+    if (coefReturn %in% countsAsTrue) {
+      coef.df <- data.frame(coef.live = a.live,
+                            exp.live  = b.live,
+                            coef.dead = a.dead,
+                            exp.dead  = b.dead
+      )
+      output <- list(summary = output, data = newData, coefs = coef.df)
+    } else {
+      output <- list(summary = output, data = newData)
+    }
+  } else {
+    if (coefReturn %in% countsAsTrue) {
+      coef.df <- data.frame(coef.live = a.live,
+                            exp.live  = b.live,
+                            coef.dead = a.dead,
+                            exp.dead  = b.dead
+      )
+      output <- list(summary = output, coefs = coef.df)
+    } else {
+      output
+    }
+  }
+  
+  
+}
