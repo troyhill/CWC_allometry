@@ -29,8 +29,7 @@ filenames <- paste0(directory, list.files(directory, pattern = "data_CWC_20"))
 dat <- lapply(filenames, read.delim)
 
 # Calculate allometric parameters and data
-data14 <- batch(inputList = dat, fun = mergeMonths)
-head(data14)
+data14 <- mergeMonths(dat)
 
 #####
 ### process data collected prior to March 2014 (organized by site)
@@ -48,9 +47,9 @@ sites <- substr(filenames, 42, nchar(filenames) - 9)
 # combine files into a single dataframe
 for(i in 1:length(rawData2013)) {
   # add site name
-  inputData        <- rawData2013[[i]][, c(1:2, 4:5, 7:9, 11)]
-  names(inputData) <- c("site", "time", "ID", "type", "hgt", "tin", "tin_plant", "mass")
-  inputData[, "site"] <- sites[i]
+  inputData        <- rawData2013[[i]][, c(1:2, 4:5, 7, 11)]
+  names(inputData) <- c("site", "time", "ID", "type", "hgt", "mass")
+#   inputData[, "site"] <- sites[i]
   if (i != 1) {
     data13 <- rbind(data13,  inputData)
   } else {
@@ -58,8 +57,6 @@ for(i in 1:length(rawData2013)) {
   }
 }
 
-# remove blank lines from data
-data13 <- data13[!data13$ID %in% "", ]
 
 ### re-label dates to match 2014/15 data
 dateList <- strsplit(x = as.character(data13$time), split = "/")
@@ -76,18 +73,24 @@ data13$time <- as.character(paste0(month.abb[as.numeric(dateList.proc[[1]])], "-
 data13$ID   <- as.character(data13$ID)
 
 
+data13[, names(data14)[!names(data14) %in% names(data13)] ]   <- as.numeric(NA)
+
 
 #####
 ### Merge raw data, add/change some columns
 #####
-cwc <- rbind(data13, data14[[2]])
+cwc <- rbind(data13, data14)
 
 # add marsh name
 cwc <- marshName(cwc)
+
+# remove blank lines from data
+# to examine the removed rows:  cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) > 3])), ] 
+cwc <- cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) < 4])), ] # removes 49 rows
+
 ### remove "bag scrap" samples
-cwc           <- cwc[!cwc$ID %in% "bag scrap", ]
-cwc$type[cwc$type %in% c("Live")] <- "LIVE"
-cwc$type[cwc$type %in% c("Dead")] <- "DEAD"
+# cwc           <- cwc[!cwc$ID %in% "bag scrap", ]
+cwc$type      <- toupper(cwc$type)
 cwc           <- droplevels(cwc)
 cwc$monthYear <- cwc$time
 cwc$time      <- as.yearmon(cwc$time, "%b-%y")
@@ -95,35 +98,14 @@ cwc$type      <- as.character(cwc$type)
 
 
 # samples to check:
-cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), ] # very odd; tiny stem, large mass tin 2131
-cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), c("mass", "hgt")] <- NA # remove for now
+# cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), ] # very odd; tiny stem, large mass tin 2131
+# cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), c("mass", "hgt")] <- NA # remove for now
 # cwc[cwc$monthYear %in% "Jan-14",]                    # very noisy data
 # plot(cwc$mass[cwc$monthYear %in% "Jun-14"] ~ cwc$hgt[cwc$monthYear %in% "Jun-14"])
 # plot(cwc$mass[cwc$monthYear %in% "Jan-14"] ~ cwc$hgt[cwc$monthYear %in% "Jan-14"])
 #####
 
 
-#####
-### get allometry for early period, merge allometry datafiles
-#####
-months <- unique(data13$time)
-for (i in 1:length(months)) {
-  sub <- data13[data13$time %in% months[i], c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")]
-  params2013_temp <- getAllometryParams(dataset = sub)
-  if (i != 1) {
-    params2013 <- rbind(params2013, params2013_temp)
-  } else {
-    params2013 <- params2013_temp
-  }
-}
-
-# merged allometric parameters
-cwc.params <- rbind(params2013, data14[[1]]) 
-
-
-
-
 
 ### save the data as .csv files
-# write.csv(cwc.params, file = "C:/RDATA/SPAL_allometry/CWC_parameters_150825.csv")
-# write.csv(cwc, file = "C:/RDATA/SPAL_allometry/CWC_allometryData_150825.csv")
+# write.csv(cwc, file = "C:/RDATA/SPAL_allometry/CWC_allometryData_150918.csv")

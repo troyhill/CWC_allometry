@@ -36,11 +36,63 @@ batch <- function (inputList, fun, ...) {
   }
   if (is.list(a)) {
     rownames(outputObj[[2]]) <- 1:nrow(outputObj[[2]])
+  } else {
+    rownames(outputObj)      <- 1:nrow(outputObj)
   }
   outputObj
 }
 
-
+mergeMonths <- function (dataset_list) {
+  # function formats and merges monthly tab-delimited plant data files
+  
+  # dataset: a dataframe with plant masses, heights etc. 
+  # sitesIncluded: which sites to report data for. "all" (default), "LUM", or "TB"
+  # returnData: should raw data be returned? If "TRUE", 
+  #  output is a list with two elements: allometry parameters and raw data.
+  # combinePlots: if `TRUE`, data from all plots are pooled (if sitesIncluded = "all", all plots are pooled).
+  
+  # error checking
+  countsAsTrue <- c("TRUE", "True", "T", "true")
+  countsAsFalse <- c("FALSE", "False", "F", "false")
+  TB.sites  <- paste0("TB", 1:4)
+  LUM.sites <- paste0("LUM", 1:3)
+  
+  for(j in 1:length(dataset_list)) {
+    dataset <- dataset_list[[j]]
+    # clean up the dataset
+    if (names(dataset)[13] %in% "Total.Dried.Plant.Weight") {  
+      names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "stm_ind", "stemMass", 
+                          "lf_ind", "leafMass", "thirdLeaf_ind", "thirdLeafMass",
+                          "mass")
+    } else if (!names(dataset)[8] %in% "mass") {
+      names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
+      dataset[, c("stm_ind", "stemMass", "lf_ind", "leafMass", "thirdLeaf_ind", "thirdLeafMass")] <- as.numeric(NA)
+    }
+    
+    # "leafMass" column has combined leaf masses, where available.
+    dataset$leafMass <- ifelse(!is.na(dataset$thirdLeafMass), dataset$leafMass + dataset$thirdLeafMass, dataset$leafMass)
+    
+    # remove empty rows and columns (determined by empty tin ID)
+    dataset          <- dataset[!is.na(dataset$ID), c("site", "time", "type", "ID", "hgt", 
+                                                      "stemMass", "leafMass", "mass")]
+    
+    # sort dataframe to follow pattern LUM1-3, TB1-4
+    dataset          <- dataset[order(dataset$site), ]
+    
+    # homogenize inconsistent labeling
+    dataset$site <- as.factor(gsub(pattern = " ", replacement = "", x = as.character(dataset$site)))
+    dataset$type <- as.character(dataset$type)
+    dataset$ID   <- as.character(dataset$ID)
+    dataset$time <- as.character(dataset$time)
+    
+    if (j != 1) {
+      outputDF <- rbind(outputDF, dataset)
+    } else {
+      outputDF <- dataset
+    }
+  }
+  outputDF
+}
 
 proc_CWC_files <- function (dataset, 
                             ExcelParameterFile = "C:/RDATA/SPAL_allometry/data_LUM123/data_CWC_oldCoeffs_150821.txt") {
@@ -62,9 +114,9 @@ proc_CWC_files <- function (dataset,
   for (i in 1:length(grep("LUM", levels(dataset$site)))) {
     x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE")) & (dataset$site %in% c(paste0("LUM", i), paste0("LUM ", i)))]
     y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE")) & (dataset$site %in% c(paste0("LUM", i), paste0("LUM ", i)))]
-    coefs      <- coef(model <- nls(y ~ I(a * exp(b * x)), start = list(a=0.1,b=0.1)))
+    coefs      <- coef(model <- nls(y ~ I(a * x^b), start = list(a = startVals, b = startVals)))
     test       <- data.frame(xVals = 1:max(x))
-    test$yVals <- coefs[1] * exp(coefs[2] * test$xVals)
+    test$yVals <- coefs[1] * test$xVals^coefs[2]
     plotname   <- paste0("LUM", i, "-", moYr)
     
     png(filename = paste0(plotname, ".png"), width = 10, height = 8, units = "cm", res = 200)
@@ -103,7 +155,7 @@ proc_CWC_files <- function (dataset,
   returnVals
 }
 
-# note 150908: getAllometryParams should be used to merge data (e.g., generate 'cwc' dataset).
+# note 150908: getAllometryParams should be used only to merge data (e.g., generate 'cwc' dataset).
 # allometry equation used is an inferior model: y = a*exp(b*x). Superior model (y = ax^b) is not always robust to small monthly datasets
 # TODO: change getAllometryParams to a general pre-processing function or incorporate a large cutoff trigger to make regressions work
 # or, combine good parts of getAllometryParams (dataset processing) into predictBiomass (so predictBiomass can be fed a list of raw data files)
@@ -321,7 +373,6 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     returnVals <- list(parameters = returnVals, data = dataset)
   } 
 }
-
 
 
 plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {

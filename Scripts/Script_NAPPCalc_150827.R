@@ -15,7 +15,7 @@
 
 ##### load libraries, run previous scripts
 #####
-library(ggplot2)
+# library(ggplot2)
 library(reshape2)
 library(plyr)
 # 'cwc' object has compiled raw allometry data
@@ -98,7 +98,7 @@ for (i in 1:length(unique(CWC.plots$site))) {
     if (nrow(subData) == 1) { 
               fillData                     <- subData[1, ]
               fillData$type                <- ifelse(fillData$type %in% "LIVE", "DEAD", "LIVE")
-              fillData[, 5:ncol(fillData)] <- as.numeric(0)
+              fillData[, grep("mass", names(fillData)):ncol(fillData)] <- as.numeric(0) # insert zeroes from mass column to end of dataset
               CWC.plots <- rbind(CWC.plots, fillData)
       }
   }
