@@ -155,22 +155,19 @@ proc_CWC_files <- function (dataset,
   returnVals
 }
 
-# note 150908: getAllometryParams should be used only to merge data (e.g., generate 'cwc' dataset).
-# allometry equation used is an inferior model: y = a*exp(b*x). Superior model (y = ax^b) is not always robust to small monthly datasets
-# TODO: change getAllometryParams to a general pre-processing function or incorporate a large cutoff trigger to make regressions work
-# or, combine good parts of getAllometryParams (dataset processing) into predictBiomass (so predictBiomass can be fed a list of raw data files)
-getAllometryParams <- function (dataset, sitesIncluded = "all", 
-                                returnData = "FALSE", combinePlots = "FALSE") {
+getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
+                                returnData = "FALSE", combinePlots = "FALSE", 
+                                cutOff = 5, nlsStartVals = 0.1) {
   # function returns parameters for exponential fits (and diagnostic plots, saved to working directory)
-  # This function is similar to proc_CWC_files, but differs in two important ways:
-  # 1) it doesn't compare R and Excel, so only calculates R models. 
-  # 2) This function also calculates allometric equations for dead material
+  # for each plot. Time span used for parameterization is the entire dataset.
   
   # dataset: a dataframe with plant masses, heights etc. 
   # sitesIncluded: which sites to report data for. "all" (default), "LUM", or "TB"
   # returnData: should raw data be returned? If "TRUE", 
   #  output is a list with two elements: allometry parameters and raw data.
   # combinePlots: if `TRUE`, data from all plots are pooled (if sitesIncluded = "all", all plots are pooled).
+  # timeName: name of time period covered by dataset
+  # cutOff: minimum number of observations to generate an allometric relationship
   
   # error checking
   countsAsTrue <- c("TRUE", "True", "T", "true")
@@ -197,33 +194,16 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     stop ("`combinePlots` argument should have one entry. Acceptable entries: `TRUE` or `FALSE`")
   }
   
-  # clean up the dataset
-  if (names(dataset)[13] %in% "Total.Dried.Plant.Weight") {  
-    names(dataset)[c(1:7, 13)] <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
-  } else if (!names(dataset)[8] %in% "mass") {
-    names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
-  }
+  # if necessary, clean up the dataset
+  #   dataset <- mergeMonths(dataset)
   
-  # remove empty rows and columns
-  dataset <- dataset[!is.na(dataset$ID), c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")]
-  
-  # sort dataframe to follow pattern LUM1-3, TB1-4
-  dataset <- dataset[order(dataset$site), ]
-  
-  
-  # homogenize inconsistent labeling
-  dataset$site <- as.factor(gsub(pattern = " ", replacement = "", x = dataset$site))
-  dataset$type <- as.character(dataset$type)
-  dataset$ID   <- as.character(dataset$ID)
-  dataset$time <- as.character(dataset$time)
-  
-  # find month (robust to datasets spanning multiple months)
-  mo <- paste(paste(as.character(grep(paste(c(unique(substr(dataset$time, 1, 3))), collapse = "|"), month.abb))), 
-              collapse = " ")
-  # year reports all years covered by a dataset; specific year-month combinations are reported by moYr
-  da <- paste0(paste0("20", unique(as.character(substr(dataset$time, 5, 6)))), collapse = " ")
-  moYr <- paste0(unique(as.character(dataset$time)), collapse = " ")
-  
+#   # find month (robust to datasets spanning multiple months)
+#   mo <- paste(paste(as.character(grep(paste(c(unique(substr(dataset$time, 1, 3))), collapse = "|"), month.abb))), 
+#               collapse = " ")
+#   # year reports all years covered by a dataset; specific year-month combinations are reported by moYr
+#   da <- paste0(paste0("20", unique(as.character(substr(dataset$time, 5, 6)))), collapse = " ")
+#   moYr <- paste0(unique(as.character(dataset$time)), collapse = " ")
+#   
   # check site exclusion flag
   if ((sitesIncluded %in% "all") & (combinePlots %in% countsAsFalse)) {
     plotsInData <- levels(dataset$site)[levels(dataset$site) %in% c(TB.sites, LUM.sites)]
@@ -245,9 +225,8 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
   }
   
   if (length(plotsInData) == 0) {
-    print(paste0("no plots from ", sitesIncluded, " were found on ", moYr, ". Try `all`."))
-    returnVals <- data.frame(monthYear = moYr, 
-                             month = mo, year = da,
+    print(paste0("no plots from ", sitesIncluded, " were found. Try using `all`."))
+    returnVals <- data.frame(timePeriod = timeName, 
                              site = NA, plot = NA,
                              coef.live = as.numeric(NA), exp.live = as.numeric(NA), 
                              MSE.live = as.numeric(NA), r.live = as.numeric(NA),    
@@ -270,8 +249,7 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
       n <- length(plotsInData) 
     }
     
-    returnVals <- data.frame(monthYear = rep(moYr, times = n), 
-                             month = rep(mo, times = n), year = rep(da, times = n),
+    returnVals <- data.frame(timePeriod = rep(timeName, times = n),
                              site = rep(NA, times = n), plot = rep(NA, times = n),
                              coef.live = rep(as.numeric(NA), times = n), exp.live = rep(as.numeric(NA), times = n), # y = coef * e^(exp * b)
                              MSE.live = rep(as.numeric(NA), times = n), r.live = rep(as.numeric(NA), times = n),    # diagnostics
@@ -280,7 +258,6 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
     )    
     
     for (i in 1:n) {
-      
       if (combinePlots %in% countsAsTrue) {
         siteName <- strsplit(plotsInData, " ")[[1]]
       }  else {
@@ -299,71 +276,47 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
       } else if ((combinePlots %in% countsAsTrue) & (sitesIncluded %in% "all")) {
         returnVals$plot[i]  <- plotsInData[i]
       } else if ((combinePlots %in% countsAsTrue) & (!sitesIncluded %in% "all")) {
-        returnVals$plot[i] <-  returnVals$site[i]
+        returnVals$plot[i]  <-  returnVals$site[i]
       }
       
       ### data subset by type
       x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
       y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
       x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
-      y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
+      y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]     
       
-      ### This didn't work, not sure why
-      #     if one x-vector has length zero but the other doesn't, it means the plot was sampled and 
-      #     both types should be in the data (if data is returned by function)
-      #     if (returnData %in% countsAsTrue) {
-      #       # if one type has data but the other doesn't insert 0s in dataset (because plot was sampled)
-      #       if ((length(x) == 0) & (length(x.dead) != 0)) { 
-      #         fillData <- dataset[1, ]
-      #         fillData$type <- "LIVE"
-      #         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
-      #         fillData$hgt <- fillData$mass <- as.numeric(0)
-      #         dataset <- rbind(dataset, fillData)
-      #       } else if ((length(x.dead) == 0) & (length(x) != 0)) {
-      #         fillData <- dataset[1, ]
-      #         fillData$type <- "DEA"
-      #         fillData$ID <- fillData$tin <- fillData$tin_plant <- NA
-      #         fillData$hgt <- fillData$mass <- as.numeric(0)
-      #         dataset <- rbind(dataset, fillData)
-      #         }
-      #     }
-      ###
-      
-      
-      if (length(x) < 2) {
+      if (length(x) < cutOff) {
         returnVals$coef.live[i] <- as.numeric(NA)
         returnVals$exp.live[i]  <- as.numeric(NA)
         returnVals$MSE.live[i]  <- as.numeric(NA)
         returnVals$r.live[i]    <- as.numeric(NA)
       } else {
-        coefs      <- coef(model <- nls(y ~ I(a * exp(b * x)), start = list(a = 0.1, b = 0.1)))
-        predicted           <- coefs[1] * exp(coefs[2] * x)
-        squared_error       <- (predicted - y)^2
-        returnVals$coef.live[i] <- coefs[1]
-        returnVals$exp.live[i]  <- coefs[2]
-        returnVals$MSE.live[i]  <- sum(squared_error, na.rm = T)
-        returnVals$r.live[i]    <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
+        coefs      <- coef(model <- nls(y ~ I(a * x^b), start = list(a = nlsStartVals, b = nlsStartVals)))
+        predicted                <- coefs[1] * x^coefs[2]
+        squared_error            <- (predicted - y)^2
+        returnVals$coef.live[i]  <- coefs[1]
+        returnVals$exp.live[i]   <- coefs[2]
+        returnVals$MSE.live[i]   <- sum(squared_error, na.rm = T)
+        returnVals$r.live[i]     <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
       }
       
       # do the same for dead stems, if there's more than two stems
-      if (length(dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]) > 2) {
-        if (length(x.dead) < 2) {
-          returnVals$coef.dead[i] <- as.numeric(NA)
-          returnVals$exp.dead[i]  <- as.numeric(NA)
-          returnVals$MSE.dead[i]  <- as.numeric(NA)
-          returnVals$r.dead[i]    <- as.numeric(NA)
-        } else {
-          coefs.dead <- coef(model.dead <- nls(y.dead ~ I(a * exp(b * x.dead)), start = list(a = 0.1, b = 0.1)))
-          
-          predicted.dead      <- coefs.dead[1] * exp(coefs.dead[2] * x.dead)
-          squared_error.dead  <- (predicted.dead - y.dead)^2
-          
-          
-          returnVals$coef.dead[i] <- coefs.dead[1]
-          returnVals$exp.dead[i]  <- coefs.dead[2]
-          returnVals$MSE.dead[i]  <- sum(squared_error.dead, na.rm = T)
-          returnVals$r.dead[i]    <- sqrt(1 - (deviance(model.dead)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2)))
-        } 
+     if (length(x.dead) < cutOff) {
+        returnVals$coef.dead[i] <- as.numeric(NA)
+        returnVals$exp.dead[i]  <- as.numeric(NA)
+        returnVals$MSE.dead[i]  <- as.numeric(NA)
+        returnVals$r.dead[i]    <- as.numeric(NA)
+      } else {
+        coefs.dead <- coef(model.dead <- nls(y.dead ~ I(a * x.dead^b), start = list(a = nlsStartVals, b = nlsStartVals)))
+        
+        predicted.dead      <- coefs.dead[1] * x.dead^coefs.dead[2]
+        squared_error.dead  <- (predicted.dead - y.dead)^2
+        
+        
+        returnVals$coef.dead[i] <- coefs.dead[1]
+        returnVals$exp.dead[i]  <- coefs.dead[2]
+        returnVals$MSE.dead[i]  <- sum(squared_error.dead, na.rm = T)
+        returnVals$r.dead[i]    <- sqrt(1 - (deviance(model.dead)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2)))
       }
     }
   }
@@ -375,8 +328,8 @@ getAllometryParams <- function (dataset, sitesIncluded = "all",
 }
 
 
-plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
-  procData <- getAllometryParams(dataset = monthlyData, returnData = "TRUE", sitesIncluded = site)
+plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE", ...) {
+  procData <- getAllometryParams(dataset = monthlyData, returnData = "TRUE", sitesIncluded = site, ...)
   
   living <- c("Live", "coef.live", "exp.live", "live")
   dying <- c("Dead", "coef.dead", "exp.dead", "dead")
@@ -410,7 +363,7 @@ plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
            legend = c(unique(procData[[1]]$plot)), pch = c(1:nrow(procData[[1]])), 
            lty = c(1:nrow(procData[[1]])),
            cex = 0.7,  merge = TRUE, bty = "n", 
-           title = paste0(procData[[1]]$monthYear[1], " ", living[4], " stems")
+           title = paste0(procData[[1]]$timePeriod[1], " ", living[4], " stems")
     )
   }
   if (type %in% c("dead", "Dead", "DEAD", "both", "Both", "BOTH")) {
@@ -440,7 +393,7 @@ plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE") {
            legend = c(unique(procData[[1]]$plot)), pch = c(1:nrow(procData[[1]])), 
            lty = c(1:nrow(procData[[1]])),
            cex = 0.7,  merge = TRUE, bty = "n", 
-           title = paste0(procData[[1]]$monthYear[1], " ", dying[4], " stems")
+           title = paste0(procData[[1]]$timePeriod[1], " ", dying[4], " stems")
     )
   }
   if (save %in% c("TRUE", "True", "true", "T")) {
