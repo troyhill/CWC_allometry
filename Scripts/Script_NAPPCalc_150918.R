@@ -21,9 +21,25 @@ library(plyr)
 # 'cwc' object has compiled raw allometry data
 # source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_mergeData_150918.R")
 # or read.csv("C:/RDATA/SPAL_allometry/CWC_allometryData_150918.csv")
+#####
 
-# load litter data
+##### load ancillary datasets
+#####
+# litter
 lit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_litter_150917.txt")
+
+# Belowground biomass
+bg <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_belowground_150918.txt", skip = 1)
+bg <- bg[, c(1, 2, 5, 8, 11, 14)]
+
+# moisture/OM content
+om <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_moisture_OM_150917.txt")
+om <- om[, c(1:2, 4:6, 8:9, 12)]
+
+# benthic chlorophyll
+chl <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_benthicChl_150917.txt", skip = 13)
+
+# nutrients? do these data exist? 
 
 #####
 
@@ -68,27 +84,62 @@ nappLabelConv <- function(variable, value){
 ##### declare local variables
 #####
 plotSize <- 0.25^ 2
+coreTube <- pi*(6.9/2)^2 # are of coring tube: cm2 
+bagMass  <- 5.4 # grams; bags used for belowground cores
+  
 #####
 
 ##### Process litter data
 #####
 # rename columns
 names(lit)    <- c("monthYear", "site", "plot", "quadrat", "plants_tin", "tin", "litterMass")
-lit$monthYear <- as.character(lit$monthYear)
+lit$moYr      <- as.character(lit$monthYear)
+lit$monthYear <- as.yearmon(lit$moYr, "%b-%y")
 lit$site      <- gsub(" ", "", as.character(lit$site))
 lit$plot      <- as.character(lit$plot)
 lit$quadrat   <- substr(gsub(" ", "", as.character(lit$quadrat)), 1, 1)
 
-# there are two "A" samples in Dec13/Jan14 LUM1; average them. 
-# or, should these be LUM2?
-# lit2 <- ddply(lit, .(monthYear, site, plot, quadrat), summarise,
-#              litterMass = mean(litterMass)
-#              )
-
-# only interested in quadrat A
-lit <- lit[(lit$quadrat %in% "A"), c("monthYear", "site", "litterMass")]
+# there are two "A" samples in summer 2014 for LUM1; average them. 
+# this removes two rows, but should  only remove one; not sure what the missing row is
+lit <- ddply(lit, .(monthYear, site, plot, monthYear, moYr, quadrat), summarise,
+             litterMass = mean(litterMass, na.rm = T))
+# I'm only interested in quadrat A
+lit <- lit[(lit$quadrat %in% "A"), c("monthYear", "moYr", "site", "litterMass")]
 
 #####
+
+##### Process ancillary data
+#####
+names(bg) <- c("moYr", "site", "depth", "live.bg", "dead.bg", "total.bg")
+bg$moYr   <- as.yearmon(bg$moYr, "%b-%y")
+bg$site   <- gsub(" ", "", as.character(bg$site))
+bg$depth  <- gsub(" ", "", as.character(bg$depth))
+bg[, 4:6] <- bg[, 4:6] / coreTube * 10^4 # mass per m2
+bg$year <- as.numeric(substr(bg$moYr, 5, 8))
+# ignore depth increments for now...
+bg2 <- ddply(bg[, c(1:2, 4:6)], .(site, moYr, year), colwise(sum, na.rm = T))
+bg2$live.bg[bg2$live.bg == 0] <- NA # zeroes should be NAs (live/dead material not separated)
+bg2$dead.bg[bg2$dead.bg == 0] <- NA
+
+names(om) <- c("moYr", "site", "depth", "bagSoilWet", "tin", "tinPlusWetSample", "SoilTin70C", "ashedSoilTin")
+om$moYr <- as.yearmon(om$moYr, "%b-%y")
+om$site <- gsub(" ", "", as.character(om$site))
+# note: moisture content is calculated wrong in spreadsheet
+om$gravWtrCont  <- (om$tinPlusWetSample - om$SoilTin70C) / (om$tinPlusWetSample - om$tin)
+om$volWtrCont   <- (om$tinPlusWetSample - om$SoilTin70C) / (coreTube * 5) # assumes 1.0 g/cm3 water density
+om$pctOM        <- (om$SoilTin70C - om$ashedSoilTin) / (om$SoilTin70C - om$tin)
+om$dryMass      <- (om$bagSoilWet - bagMass) * (1-om$gravWtrCont) # dry mass (g; 70C)
+om$bulkDens     <- om$dryMass / (coreTube*5)
+om$OMVol        <- (om$pctOM * om$dryMass)/1.1
+om$IMVol        <- ((1-om$pctOM) * om$dryMass)/2.65
+om$wtrVol       <- om$volWtrCont*(coreTube * 5)
+om$poreVol      <- (coreTube * 5) - om$wtrVol - om$IMVol - om$OMVol
+om$pctPoreSpace <- om$poreVol / (coreTube * 5)
+om2 <- om[, c("site", "moYr", "pctOM", "bulkDens", "volWtrCont", "poreVol", "wtrVol", "IMVol", "OMVol")]
+
+
+#####
+
 
 ##### explore data, look for artifacts/errors
 #####
@@ -101,8 +152,6 @@ hist(cwc$mass) # bag scraps are included in this dataset; these are the heavier 
 
 ##### Aggregate data: plot- and marsh-level metrics
 #####
-
-# first, add monthYear
 CWC.plots <- ddply(cwc, .(site, time, type, marsh, monthYear), summarise,
                    mass         =  sum(mass, na.rm = T) / plotSize,
                    stems        =  length(type) / plotSize,
@@ -110,8 +159,21 @@ CWC.plots <- ddply(cwc, .(site, time, type, marsh, monthYear), summarise,
                    lngth.median =  median(hgt, na.rm = T)
                    )
 
+### add litter
+head(lit)
+head(CWC.plots)
+
+for (i in 1:nrow(lit)) {
+  targPlot <- lit$site[i]
+  targTime <- lit$moYr[i]
+  litterMass <- lit$litterMass[(lit$site %in% targPlot) & (lit$moYr %in% targTime)]
+  # add litter mass to dead mass for plot
+  CWC.plots$mass[(CWC.plots$type %in% "DEAD") & (CWC.plots$site %in% targPlot) & (CWC.plots$monthYear %in% targTime)] <- litterMass / plotSize + 
+    CWC.plots$mass[(CWC.plots$type %in% "DEAD") & (CWC.plots$site %in% targPlot) & (CWC.plots$monthYear %in% targTime)]
+}
+
 ### make sure that an absence of biomass has not been interpreted as an absence of sampling
-nrow(CWC.plots) # 207
+nrow(CWC.plots) # 211
 for (i in 1:length(unique(CWC.plots$site))) {
   for (j in 1:length(unique(CWC.plots$time))) {
     plot    <- unique(CWC.plots$site)[i]
@@ -126,14 +188,13 @@ for (i in 1:length(unique(CWC.plots$site))) {
   }
   rownames(CWC.plots) <- 1:nrow(CWC.plots)
 }
-nrow(CWC.plots) # 5 larger (212)
-tail(CWC.plots) # verified these 150825
+nrow(CWC.plots) # 1 larger (212)
 CWC.plots$year <- substr(as.character(CWC.plots$time), 5, 9)
-# write.csv(CWC.plots, file = "C:/RDATA/SPAL_allometry/CWC_plotData_150825.csv")
+# write.csv(CWC.plots, file = "C:/RDATA/SPAL_allometry/CWC_plotData_150918.csv")
 
 
 ### get marsh-level metrics
-cwc.ag <- ddply(CWC.plots, .(marsh, time, type), summarise,
+cwc.ag <- ddply(CWC.plots, .(marsh, time, year, type), summarise,
                    biomass          =  mean(mass, na.rm = T),
                    stemDensity      =  mean(stems, na.rm = T),
                    length.top3      =  mean(lngth.top3, na.rm = T),
@@ -151,7 +212,7 @@ head(cwc.ag)
 
 
 ### get combined live + dead biomass 
-plot.totals <- ddply(CWC.plots, .(site, time, marsh), summarise,
+plot.totals <- ddply(CWC.plots, .(site, time, year, marsh), summarise,
                      biomass.all = sum(mass, na.rm = T),
                      stems.all   = sum(stems, na.rm = T)
 )
@@ -208,8 +269,8 @@ panel_plot1(y = "length.median", x = "time", ylab = "median stem length")
 
 
 # Only plot LUM, since the other sites are incomplete
-m.cwc    <- melt(cwc.ag, id.vars = c("marsh", "time", "type"), measure.vars = names(cwc.ag)[4:6])
-m.cwc.se <- melt(cwc.ag, id.vars = c("marsh", "time", "type"), measure.vars = names(cwc.ag)[8:10])
+m.cwc    <- melt(cwc.ag, id.vars = c("marsh", "time", "type"), measure.vars = names(cwc.ag)[5:7])
+m.cwc.se <- melt(cwc.ag, id.vars = c("marsh", "time", "type"), measure.vars = names(cwc.ag)[9:11])
 m.cwc$value.se <- m.cwc.se[, 5]
 
 lum <- m.cwc[m.cwc$marsh %in% "LUM", ]
@@ -278,6 +339,7 @@ PSC(napp)
 
 # compare productivity estimates
 # first, summarize
+
 dd.napp   <- ddply(napp2$summary, .(marsh, year), summarise,
                    smalley  = mean(napp.smalley, na.rm = T),
                    MH       = mean(napp.MH, na.rm = T),
@@ -331,8 +393,30 @@ ggplot(m.napp[(!m.napp$year %in% "2015"), ], aes(x = year, y = value, fill = var
 
 
 
+#####
+##### Explore belowground biomass data (masses are g/m2)
+#####
+PSC(bg2, liveCol = "live.bg", deadCol = "dead.bg")
+
+
+#####
+
+
+#####
+##### Add ancillary data, look for correlations
+#####
+head(om2)
+head(CWC.plots)
+
+ 
+#####
+
+
+
+
 ### TODO:
-# run ANOVAs?
+# run ANOVAs on NAPP methods?
+# add ancillary params to napp, napp2$summary
 
 #####
 ##### 

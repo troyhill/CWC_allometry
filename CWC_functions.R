@@ -839,3 +839,5 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
     }
   }
 }
+
+
