@@ -37,7 +37,9 @@ om <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_moisture_OM_150917.tx
 om <- om[, c(1:2, 4:6, 8:9, 12)]
 
 # benthic chlorophyll
-chl <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_benthicChl_150917.txt", skip = 13)
+chl <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_benthicChl_150917.txt", skip = 13,
+                  na.strings = "#DIV/0!")
+chl <- chl[!is.na(chl[, 18]), c(1:2, 5, 18:19, 22:23)] # leaving out irrelevant data (meter mark, quadrat)
 
 # nutrients? do these data exist? 
 
@@ -83,10 +85,10 @@ nappLabelConv <- function(variable, value){
 
 ##### declare local variables
 #####
-plotSize <- 0.25^ 2
-coreTube <- pi*(6.9/2)^2 # are of coring tube: cm2 
-bagMass  <- 5.4 # grams; bags used for belowground cores
-  
+plotSize        <- 0.25^ 2
+coreTube        <- pi*(6.9/2)^2 # area of coring tube: cm2 
+bagMass         <- 5.4          # grams; bags used for belowground cores
+chl_syringeArea <- 1.767        # cm2
 #####
 
 ##### Process litter data
@@ -110,6 +112,8 @@ lit <- lit[(lit$quadrat %in% "A"), c("monthYear", "moYr", "site", "litterMass")]
 
 ##### Process ancillary data
 #####
+
+### belowground biomass data
 names(bg) <- c("moYr", "site", "depth", "live.bg", "dead.bg", "total.bg")
 bg$moYr   <- as.yearmon(bg$moYr, "%b-%y")
 bg$site   <- gsub(" ", "", as.character(bg$site))
@@ -121,6 +125,8 @@ bg2 <- ddply(bg[, c(1:2, 4:6)], .(site, moYr, year), colwise(sum, na.rm = T))
 bg2$live.bg[bg2$live.bg == 0] <- NA # zeroes should be NAs (live/dead material not separated)
 bg2$dead.bg[bg2$dead.bg == 0] <- NA
 
+
+### organic matter, water content data
 names(om) <- c("moYr", "site", "depth", "bagSoilWet", "tin", "tinPlusWetSample", "SoilTin70C", "ashedSoilTin")
 om$moYr <- as.yearmon(om$moYr, "%b-%y")
 om$site <- gsub(" ", "", as.character(om$site))
@@ -136,6 +142,16 @@ om$wtrVol       <- om$volWtrCont*(coreTube * 5)
 om$poreVol      <- (coreTube * 5) - om$wtrVol - om$IMVol - om$OMVol
 om$pctPoreSpace <- om$poreVol / (coreTube * 5)
 om2 <- om[, c("site", "moYr", "pctOM", "bulkDens", "volWtrCont", "poreVol", "wtrVol", "IMVol", "OMVol")]
+
+
+### chlorophyll A & phaeopigment inventories, concentrations
+names(chl)       <- c("date", "plot", "sampleName", "chlA_ugcm2", "pgmt_ugcm2", "chlA_ugg", "pgmt_ugg") # chlorophyll A and pigments, expressed in per cm2 and per gram dry mass of sediment
+chl$plot         <- gsub(" ", "", as.character(chl$plot))
+chl$sampleName   <- gsub(" ", "", as.character(chl$sampleName))
+
+
+### nutrients
+
 
 
 #####
