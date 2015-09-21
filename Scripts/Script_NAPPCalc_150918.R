@@ -334,8 +334,10 @@ napp2$summary
 napp2$summary <- marshName(napp2$summary)
 
 # compare with separate peak standing crop calculation
-PSC(napp)
-
+pscInc <- PSC(napp)
+pscInc$turnoverTime_a <- 12 / (pscInc$psc_a / pscInc$maxMin_a)
+pscInc$turnoverTime_b <- 12 / (pscInc$psc_b / pscInc$maxMin_b)
+summary(pscInc$turnoverTime_b[pscInc$turnoverTime_b > 0])
 
 # compare productivity estimates
 # first, summarize
@@ -360,7 +362,8 @@ m.napp.se  <- melt(dd.napp.se, id.vars = c("marsh", "year"))
 m.napp$value.se  <- m.napp.se$value
 
 
-# Compare sites across different methods
+# plots comparing sites across different methods
+#####
 ggplot(m.napp[!m.napp$year %in% "2015", ], aes(x = year, y = value, col = marsh)) + geom_point() + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
   facet_grid(variable ~ ., scale = "fixed", labeller = nappLabelConv) + ylim(0, 3500) + 
@@ -390,13 +393,27 @@ ggplot(m.napp[(!m.napp$year %in% "2015"), ], aes(x = year, y = value, fill = var
                                  "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
 # ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_allSites.png", width = 6, height= 5, units = "in", dpi = 300)
-
+#####
 
 
 #####
 ##### Explore belowground biomass data (masses are g/m2)
 #####
-PSC(bg2, liveCol = "live.bg", deadCol = "dead.bg")
+
+### get max - min for total MOM (similar to Gallagher and Plumley 1979)
+### get turnover time (also do this for aboveground biomass): maximum biomass divided by annual increment 
+# PSC(bg2, liveCol = "live.bg", deadCol = "dead.bg")
+# max total biomass is in 'psc_a' column
+bgInc              <- PSC(bg2, liveCol = "total.bg", deadCol = "dead.bg", type = "PSC-A") 
+bgInc$turnoverTime <- 12 / (bgInc$psc_a / bgInc$maxMin_a) # max biomass divided by max-min increment. units = months
+summary(bgInc$turnoverTime[bgInc$turnoverTime > 0])
+# MOM turnover time is ~ a month more rapid than aboveground biomass
+
+names(bgInc)[3:5] <- paste0("bg_", names(bgInc)[3:5])
+napp2$summary$siteYr <- paste0(pscInc$site, "-", pscInc$year)
+bgInc$siteYr <- paste0(bgInc$site, "-", bgInc$year)
+
+abpp <- join_all(list(napp2$summary, pscInc[, c(5:9)], bgInc[, 3:6]), by = "siteYr")
 
 
 #####

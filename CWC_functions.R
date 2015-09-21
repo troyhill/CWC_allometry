@@ -404,7 +404,8 @@ plotAllom <- function(monthlyData, site = "LUM", type = "both", save = "TRUE", .
 
 
 
-PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", type = "both") {
+PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", type = "both",
+                maxMinIncrement = "TRUE") {
   # peak standing crop estimates of NAPP
   # runs for entire dataset, reports results by year for each site (summary statistics)
   #   dataset = dataframe with your data
@@ -413,6 +414,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
   #   yearCol = name of the column with year (4 digits)
   #   siteCol = name of the column with site name
   #   type = "PSC-A" is the traditional approach, using just live material; "PSC-B" uses live + dead material in estimates of peak standing crop
+  #   maxMinIncrement = indicates whether maximum-mininum biomass increment should be calculated
   
   # Usage examples: 
   # A single site, single year
@@ -436,6 +438,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
     stop ("`type` argument is too long. It must be of length 1.")
   }
   ###
+  countsAsTrue  <- c("T", "TRUE", "true", "True")
   
   for (h in 1:length(unique(dataset[, siteCol]))) {
     targetSite <- unique(dataset[, siteCol])[h]
@@ -444,15 +447,33 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
       targetYear <- unique(subData1[, yearCol])[i]
       subData <- subData1[subData1[, yearCol] %in% targetYear, ]
       if (type %in% "both") {
-        PSC_A  <- max(subData[, liveCol], na.rm = T)
-        PSC_B  <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
-        output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A, psc_b = PSC_B)
+        PSC_A    <- max(subData[, liveCol], na.rm = T)
+        PSC_B    <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+        if (maxMinIncrement %in% countsAsTrue) {
+          maxMin_a <- PSC_A - min(subData[, liveCol], na.rm = T)
+          maxMin_b <- PSC_B - min((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+          output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A, psc_b = PSC_B,
+                               maxMin_a = maxMin_a, maxMin_b = maxMin_b)
+        } else {
+          output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A, psc_b = PSC_B)
+        }
       } else if (type %in% "PSC-A") {
         PSC_A <- max(subData[, liveCol], na.rm = T)
-        output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A)
+        maxMin_a <- PSC_A - min(subData[, liveCol], na.rm = T)
+        if (maxMinIncrement %in% countsAsTrue) {
+          maxMin_a <- PSC_A - min(subData[, liveCol], na.rm = T)
+          output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A, maxMin_a = maxMin_a)
+        } else {
+          output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A)
+        }
       } else if (type %in% "PSC-B") {
         PSC_B  <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
-        output <- data.frame(site = targetSite, year = targetYear, psc_b = PSC_B)
+        if (maxMinIncrement %in% countsAsTrue) {
+          maxMin_b <- PSC_B - min((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+          output <- data.frame(site = targetSite, year = targetYear, psc_b = PSC_B, maxMin_b = maxMin_b)
+        } else {        
+          output <- data.frame(site = targetSite, year = targetYear, psc_b = PSC_B)
+        }
       }
       
       if (i == 1) {
