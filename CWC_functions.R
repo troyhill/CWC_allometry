@@ -862,3 +862,38 @@ predictBiomass <- function(plotData = cwc, monthYear, plot, quadrat = 0.25,
 }
 
 
+
+
+se <- function(x){
+  ### Calculates standard errors
+  sd(x, na.rm = T) / sqrt(sum(!is.na(x) == T))
+}
+
+
+panel_plot1 <- function(y, x = "time", ylab = "") {
+  qplot(y = eval(parse(text = y)), x = as.numeric(eval(parse(text = x))), data = cwc.ag, colour = type) + geom_point() + 
+    geom_errorbar(aes(ymax = eval(parse(text = y)) + eval(parse(text = paste0(y, ".se"))), ymin = eval(parse(text = y)) - eval(parse(text = paste0(y, ".se")))), width = 0) +
+    facet_grid(marsh ~ ., scale='free_y') + labs(x = "", y = ylab) + 
+    theme_bw() + theme(legend.title = element_blank())
+}
+
+
+labeli <- function(variable, value){
+  value <- droplevels(value)
+  names_li <- list("biomass" = "Biomass (g m-2)", "stemDensity" = "Stem density (m-2)",
+                   "length.top3" = "Longest stems (cm)", "stems" = "Stem density (m-2)"
+  )
+  return(names_li[value])
+}
+
+
+nappLabelConv <- function(variable, value){
+  value <- droplevels(value)
+  names_li <- list(
+    "smalley" = "Smalley 1959", "MH" = "Milner Hughes 1968", 
+    "VTS" = "Valiela et al. 1975", 
+    "psc.live" = "Peak (live)",
+    "psc.tot" = "Peak (live + dead)"
+  )
+  return(names_li[value])
+}
