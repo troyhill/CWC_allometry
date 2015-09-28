@@ -23,106 +23,7 @@ library(plyr)
 # or read.csv("C:/RDATA/SPAL_allometry/CWC_allometryData_150918.csv")
 #####
 
-##### load ancillary datasets
-#####
-# litter
-lit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_litter_150917.txt")
 
-# Belowground biomass
-bg <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_belowground_150918.txt", skip = 1)
-bg <- bg[, c(1, 2, 5, 8, 11, 14)]
-
-# moisture/OM content
-om <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_moisture_OM_150917.txt")
-om <- om[, c(1:2, 4:6, 8:9, 12)]
-
-# benthic chlorophyll
-chl <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_benthicChl_150917.txt", skip = 13,
-                  na.strings = "#DIV/0!")
-chl <- chl[!is.na(chl[, 18]), c(1:2, 5, 18:19, 22:23)] # leaving out irrelevant data (meter mark, quadrat)
-
-# nutrients? do these data exist? 
-
-#####
-
-##### declare custom functions
-#####
-#####
-
-
-
-##### declare local variables
-#####
-plotSize        <- 0.25^ 2
-coreTube        <- pi*(6.9/2)^2 # area of coring tube: cm2 
-bagMass         <- 5.4          # grams; bags used for belowground cores
-chl_syringeArea <- 1.767        # cm2
-#####
-
-##### Process litter data
-#####
-# rename columns
-names(lit)    <- c("monthYear", "site", "plot", "quadrat", "plants_tin", "tin", "litterMass")
-lit$moYr      <- as.character(lit$monthYear)
-lit$monthYear <- as.yearmon(lit$moYr, "%b-%y")
-lit$site      <- gsub(" ", "", as.character(lit$site))
-lit$plot      <- as.character(lit$plot)
-lit$quadrat   <- substr(gsub(" ", "", as.character(lit$quadrat)), 1, 1)
-
-# there are two "A" samples in summer 2014 for LUM1; average them. 
-# this removes two rows, but should  only remove one; not sure what the missing row is
-lit <- ddply(lit, .(monthYear, site, plot, monthYear, moYr, quadrat), summarise,
-             litterMass = mean(litterMass, na.rm = T))
-# I'm only interested in quadrat A
-lit <- lit[(lit$quadrat %in% "A"), c("monthYear", "moYr", "site", "litterMass")]
-
-#####
-
-##### Process ancillary data
-#####
-
-### belowground biomass data
-names(bg) <- c("moYr", "site", "depth", "live.bg", "dead.bg", "total.bg")
-bg$moYr   <- as.yearmon(bg$moYr, "%b-%y")
-bg$site   <- gsub(" ", "", as.character(bg$site))
-bg$depth  <- gsub(" ", "", as.character(bg$depth))
-bg[, 4:6] <- bg[, 4:6] / coreTube * 10^4 # mass per m2
-bg$year <- as.numeric(substr(bg$moYr, 5, 8))
-# ignore depth increments for now...
-bg2 <- ddply(bg[, c(1:2, 4:6)], .(site, moYr, year), colwise(sum, na.rm = T))
-bg2$live.bg[bg2$live.bg == 0] <- NA # zeroes should be NAs (live/dead material not separated)
-bg2$dead.bg[bg2$dead.bg == 0] <- NA
-
-
-### organic matter, water content data
-names(om) <- c("moYr", "site", "depth", "bagSoilWet", "tin", "tinPlusWetSample", "SoilTin70C", "ashedSoilTin")
-om$moYr <- as.yearmon(om$moYr, "%b-%y")
-om$site <- gsub(" ", "", as.character(om$site))
-# note: moisture content is calculated wrong in spreadsheet
-om$gravWtrCont  <- (om$tinPlusWetSample - om$SoilTin70C) / (om$tinPlusWetSample - om$tin)
-om$volWtrCont   <- (om$tinPlusWetSample - om$SoilTin70C) / (coreTube * 5) # assumes 1.0 g/cm3 water density
-om$pctOM        <- (om$SoilTin70C - om$ashedSoilTin) / (om$SoilTin70C - om$tin)
-om$dryMass      <- (om$bagSoilWet - bagMass) * (1-om$gravWtrCont) # dry mass (g; 70C)
-om$bulkDens     <- om$dryMass / (coreTube*5)
-om$OMVol        <- (om$pctOM * om$dryMass)/1.1
-om$IMVol        <- ((1-om$pctOM) * om$dryMass)/2.65
-om$wtrVol       <- om$volWtrCont*(coreTube * 5)
-om$poreVol      <- (coreTube * 5) - om$wtrVol - om$IMVol - om$OMVol
-om$pctPoreSpace <- om$poreVol / (coreTube * 5)
-om2 <- om[, c("site", "moYr", "pctOM", "bulkDens", "volWtrCont", "poreVol", "wtrVol", "IMVol", "OMVol")]
-
-
-### chlorophyll A & phaeopigment inventories, concentrations
-names(chl)       <- c("date", "plot", "sampleName", "chlA_ugcm2", "pgmt_ugcm2", "chlA_ugg", "pgmt_ugg") # chlorophyll A and pigments, expressed in per cm2 and per gram dry mass of sediment
-chl$plot         <- gsub(" ", "", as.character(chl$plot))
-chl$sampleName   <- gsub(" ", "", as.character(chl$sampleName))
-
-
-### nutrients
-
-
-
-#####
 
 
 ##### explore data, look for artifacts/errors
@@ -390,7 +291,7 @@ ggplot(m.napp[(!m.napp$year %in% "2015"), ], aes(x = year, y = value, fill = var
 # max total biomass is in 'psc_a' column
 bgInc              <- PSC(bg2, liveCol = "total.bg", deadCol = "dead.bg", type = "PSC-A") 
 bgInc$turnoverTime <- 12 / (bgInc$psc_a / bgInc$maxMin_a) # max biomass divided by max-min increment. units = months
-summary(bgInc$turnoverTime[bgInc$turnoverTime > 0])
+summary(bgInc)
 # MOM turnover time is ~ a month more rapid than aboveground biomass
 
 names(bgInc)[3:5] <- paste0("bg_", names(bgInc)[3:5])
@@ -398,7 +299,10 @@ napp2$summary$siteYr <- paste0(pscInc$site, "-", pscInc$year)
 bgInc$siteYr <- paste0(bgInc$site, "-", bgInc$year)
 
 abpp <- join_all(list(napp2$summary, pscInc[, c(5:9)], bgInc[, 3:6]), by = "siteYr")
-
+summary(abpp)
+abpp <- zeroToNA(abpp)
+abpp$rtToSht <- abpp$bg_maxMin_a / abpp$napp.psc.b
+summary(abpp[as.character(abpp$year) %in% c("2014"), ])
 
 #####
 

@@ -897,3 +897,53 @@ nappLabelConv <- function(variable, value){
   )
   return(names_li[value])
 }
+
+
+allomLabeller1 <- function(variable, value){
+  value <- droplevels(value)
+  names_li <- list(
+    "live.mean" = "Live stems", 
+    "dead.mean" = "Dead stems",
+    
+    "sumr" = "summer",
+    "wint" = "winter",
+    "fall" = "Fall", 
+    "sprg" = "Spring"#,
+#     "LUM" = "LUMCON",
+#     "TB-B" = "Lake Barre",
+#     "TB-A" = "Bay La Fleur"
+  )
+  return(names_li[value])
+}
+
+
+# 
+# chlLabeller <- function(variable, value){
+#   value <- droplevels(value)
+#   names_li <- list(
+#     "chlA_ugcm2" = expression("Chl. a ("*mu*"g"%.%"cm"^2*")"), 
+#     "pgmt_ugcm2" = expression("pigment ("*mu*"g"%.%"cm"^2*")"),
+#     "chlA_ugg"   = expression("Chl. a ("*mu*"g"%.%"g"^-1*")"),
+#     "pgmt_ugg"   = expression("pigment ("*mu*"g"%.%"g"^-1*")")
+#   )
+#   return(names_li[value])
+# }
+
+chlLabeller <- function(variable, value){
+  value <- droplevels(value)
+  names_li <- list(
+    "chlA_inv" = expression("Chl. a (mg"%.%"m"^2*")"), 
+    "pgmt_inv" = expression("pigment (mg"%.%"m"^2*")"),
+    "chlA_conc"   = expression("Chl. a (mg"%.%"g"^-1*")"),
+    "pgmt_conc"   = expression("pigment (mg"%.%"g"^-1*")")
+  )
+  return(names_li[value])
+}
+
+zeroToNA <- function(dataset, cols = c(1:ncol(dataset))) {
+  # function converts all zeroes in a dataset to NAs
+  for (i in 1:length(cols)) {
+    dataset[, cols[i]][dataset[, cols[i]] == 0] <- NA
+  }
+  dataset
+}

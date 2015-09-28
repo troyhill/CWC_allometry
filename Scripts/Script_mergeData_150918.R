@@ -19,6 +19,16 @@ source("C:/RDATA/SPAL_allometry/CWC_allometry/CWC_functions.R") # see https://gi
 
 
 
+##### declare local variables
+#####
+plotSize        <- 0.25^ 2
+coreTube        <- pi*(6.9/2)^2 # area of coring tube: cm2 
+bagMass         <- 5.4          # grams; bags used for belowground cores
+chl_syringeArea <- 2.0106        # cm2
+#####
+
+
+
 #####
 ### process data collected since March 2014 (organized by month)
 #####
