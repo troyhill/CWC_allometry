@@ -495,7 +495,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
                      MilnerHughes = "TRUE", summarize = "FALSE", timeCol = "time") {
-  # implements Smalley (1959) and Milner and Hughes (1968)
+  # implements Smalley (1958) and Milner and Hughes (1968)
   # runs for entire dataset, reports results by year for each plot
   #   dataset = dataframe with your data
   #   liveCol = name of the column with live biomass data
@@ -540,6 +540,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   live.inc    <- "live.inc" # VTS1975's delL
   dead.inc    <- "dead.inc" # VTS1975's delD
   MH          <- "MH"
+  maxMin      <- "maxMin"
   # Valiela, Teal, Sass 1975
   eV          <- "VTS1975.inc"
   VTS         <- "VTS1975"
@@ -610,8 +611,8 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       # sum smalley increments
       subData2[, smalley][!is.na(subData2[, smalley.inc])] <- cumsum(subData2[, smalley.inc][!is.na(subData2[, smalley.inc])])
       
-      # sum positive biomass increments for Millner & Hughes 1968
-      subData2[, "MH.inc"] <- subData2[, live.inc] + subData2[, dead.inc]
+      # sum positive *live* biomass increments for Millner & Hughes 1968
+      subData2[, "MH.inc"] <- subData2[, live.inc]
       # use only positive increments to calc MH NAPP
       subData2[, "MH.inc"][subData2[, "MH.inc"] < 0] <- 0
       subData2[, MH][!is.na(subData2[, "MH.inc"])] <- cumsum(subData2[, "MH.inc"][!is.na(subData2[, "MH.inc"])])
@@ -621,12 +622,15 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       
       # sum peak standing crop increments
       subData2[, PSC_A][!is.na(subData2[, liveCol])]                       <- cummax(subData2[, liveCol][!is.na(subData2[, liveCol])])
-      subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- cummax(c(subData2[, liveCol] + subData2[, deadCol])[!is.na(c(subData2[, liveCol] + subData2[, deadCol]))])
+      # PSC_B reflects maximum summed biomass when live biomass is at its peak. 
+      subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- max(subData2[, liveCol][!is.na(subData2[, liveCol])]) + subData2[, deadCol][subData2[, liveCol][!is.na(subData2[, liveCol])] == max(subData2[, liveCol][!is.na(subData2[, liveCol])])]
       
       
       # add to output dataframe
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley]  <- subData2[, smalley]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), MH]       <- subData2[, MH]
+      # MH should resolve to max-min if first and final biomass data = 0
+      tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), maxMin]   <- max(subData2[, liveCol], na.rm = T) - min(subData2[, liveCol], na.rm = T)
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_A]    <- subData2[, PSC_A]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_B]    <- subData2[, PSC_B]
@@ -646,11 +650,15 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
         intData <- data.frame(
           site = targetSite, 
           year = targetYear,
+          mean.live    = mean(subData2[, liveCol], na.rm = T),
+          mean.dead    = mean(subData2[, deadCol], na.rm = T),
           napp.smalley = max(subData2[, smalley], na.rm = T), 
           napp.MH      = max(subData2[, MH], na.rm = T), 
+          napp.maxMin  = max(subData2[, maxMin], na.rm = T), 
           napp.VTS     = max(subData2[, VTS], na.rm = T), 
           napp.psc.a   = max(subData2[, PSC_A], na.rm = T), 
           napp.psc.b   = max(subData2[, PSC_B], na.rm = T), 
+          n            = sum(!is.na(subData2[, liveCol])),
           t.smalley    = ifelse(is.finite(max(subData2[, smalley], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, smalley])]), NA),
           t.MH         = ifelse(is.finite(max(subData2[, MH], na.rm = T)), as.character(subData2[, timeCol][which.max(subData2[, MH])]), NA),
           t.vts        = as.character(subData2[, timeCol][which.max(subData2[, VTS])]),
