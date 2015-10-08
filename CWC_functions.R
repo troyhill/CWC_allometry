@@ -44,7 +44,7 @@ batch <- function (inputList, fun, ...) {
 
 mergeMonths <- function (dataset_list) {
   # function formats and merges monthly tab-delimited plant data files
-  
+   
   # dataset: a dataframe with plant masses, heights etc. 
   # sitesIncluded: which sites to report data for. "all" (default), "LUM", or "TB"
   # returnData: should raw data be returned? If "TRUE", 
@@ -64,6 +64,10 @@ mergeMonths <- function (dataset_list) {
       names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "stm_ind", "stemMass", 
                           "lf_ind", "leafMass", "thirdLeaf_ind", "thirdLeafMass",
                           "mass")
+      # re-calculate leaf/stem masses, subtracting tin mass
+      dataset$leafMass      <- dataset$leafMass - (dataset$lf_ind * dataset$tin)
+      dataset$thirdLeafMass <- dataset$thirdLeafMass - (dataset$thirdLeaf_ind * dataset$tin)
+      dataset$stemMass      <- dataset$stemMass - (dataset$stm_ind * dataset$tin)
     } else if (!names(dataset)[8] %in% "mass") {
       names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
       dataset[, c("stm_ind", "stemMass", "lf_ind", "leafMass", "thirdLeaf_ind", "thirdLeafMass")] <- as.numeric(NA)
@@ -884,6 +888,40 @@ panel_plot1 <- function(y, x = "time", ylab = "") {
     facet_grid(marsh ~ ., scale='free_y') + labs(x = "", y = ylab) + 
     theme_bw() + theme(legend.title = element_blank())
 }
+
+seasonLabel <- function(data, monthYearColumn = "moYr", siteColumn = "site", seasons = NA, year = c(13:15)) {
+  if(is.na(seasons)) {
+    seasons <- list(
+      # spring: Mar Apr May
+      sprg = c("Mar", "Apr", "May"),
+      # summer: Jun Jul Aug
+      sumr = c("Jun", "Jul", "Aug"),
+      # fall: Sep Oct Nov
+      fall = c("Sep", "Oct", "Nov"),
+      # winter: Dec Jan Feb
+      wint = c("Dec", "Jan", "Feb")
+    )
+  }
+  
+  data[, "season"] <- as.character(NA)
+  
+  for (h in 1:length(unique(data[, siteColumn]))) {
+    targSite <- as.character(unique(data[, siteColumn])[h])
+    for (i in 1:length(seasons)) {
+      for (j in 1:length(year)) {
+        # account for winter spanning two years
+        if (i == length(seasons)) {
+          targetDates <- paste0(seasons[[i]], "-", c(year[j], year[j] + 1, year[j] + 1))
+        } else {
+          targetDates <- paste0(seasons[[i]], "-", year[j])
+        }  
+        data[, "season"][(data[, monthYearColumn] %in% targetDates) & (data[, siteColumn] %in% targSite)] <- paste(names(seasons)[i], year[j])
+      }
+    }
+  }
+  invisible(data)
+}
+
 
 
 labeli <- function(variable, value){

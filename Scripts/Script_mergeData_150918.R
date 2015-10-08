@@ -38,14 +38,14 @@ directory <- "C:/RDATA/SPAL_allometry/data_LUM123/"
 filenames <- paste0(directory, list.files(directory, pattern = "data_CWC_20"))
 dat <- lapply(filenames, read.delim)
 
-# Calculate allometric parameters and data
+# merge data from all months
 data14 <- mergeMonths(dat)
 
 #####
 ### process data collected prior to March 2014 (organized by site)
 #####
 
-# load data 
+# load data
 directory <- "C:/RDATA/SPAL_allometry/data_LUM123/"
 filenames <- paste0(directory, list.files(directory, pattern = "2013.txt"))
 rawData2013 <- lapply(filenames, read.delim, skip = 3) 
@@ -93,18 +93,20 @@ cwc <- rbind(data13, data14)
 
 # add marsh name
 cwc <- marshName(cwc)
-
-# remove blank lines from data
-# to examine the removed rows:  cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) > 3])), ] 
-cwc <- cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) < 4])), ] # removes 49 rows
-
-### remove "bag scrap" samples
-# cwc           <- cwc[!cwc$ID %in% "bag scrap", ]
-cwc$type      <- toupper(cwc$type)
-cwc           <- droplevels(cwc)
 cwc$monthYear <- cwc$time
 cwc$time      <- as.yearmon(cwc$time, "%b-%y")
 cwc$type      <- as.character(cwc$type)
+cwc$type      <- toupper(cwc$type)
+
+### separate "bag scrap" samples
+bagScraps     <- cwc[cwc$ID %in% c("bag scrap", "bag scraps"), ]
+
+# remove blank lines from data
+# to examine the removed rows:  cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) > 3])), ] 
+cwc <- cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) < 4])), ] # removes 49 rows 
+cwc <- cwc[cwc$hgt > 0, ]
+cwc <- cwc[!is.na(cwc$marsh), ]
+cwc <- droplevels(cwc)
 
 
 # samples to check:
@@ -118,4 +120,4 @@ cwc$type      <- as.character(cwc$type)
 
 
 ### save the data as .csv files
-# write.csv(cwc, file = "C:/RDATA/SPAL_allometry/CWC_allometryData_150918.csv")
+# write.csv(cwc, file = "C:/RDATA/SPAL_allometry/CWC_allometryData_151006.csv")

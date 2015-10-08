@@ -378,7 +378,7 @@ sum15[[1]]$trainingSeason  <- "sum15"
 
 seasDat <- rbind(sum13[[1]], rbind(fall13[[1]], rbind(wint13[[1]], rbind(spr14[[1]], rbind(sum14[[1]], rbind(fall14[[1]], rbind(wint14[[1]], rbind(spr15[[1]], sum15[[1]]))))))))
 seasDat <- marshName(seasDat, siteCol = "plot")
-
+seasDat <- seasDat[!is.na(seasDat$plot), ]
 
 # convert from long to wide before running nappCalc
 napp <- ddply(seasDat, .(trainingSeason, marsh, plot, monthYear, year), summarise,
@@ -417,14 +417,17 @@ m.napp$value.se  <- m.napp.se$value
 m.napp$class <- "Observed"
 m.napp$class[grep("pred.", m.napp$variable)] <- "Predicted"
 m.napp$variable[grep("pred.", m.napp$variable)] <- gsub("pred.", "", m.napp$variable[grep("pred.", as.character(m.napp$variable))])
+notNAPPNames <- c("mean.live", "mean.dead", "n")
 
+m.napp <- m.napp[!as.character(m.napp$variable) %in% notNAPPNames, ]
+m.napp$variable <- droplevels(m.napp$variable)
 
 ggplot(m.napp[(m.napp$year %in% "2014") & (m.napp$marsh %in% "LUM"), ], aes(x = class, y = value, fill = variable)) + 
   geom_bar(stat = "identity", position = "dodge") + facet_wrap(~ trainingSeason, ncol = 3, nrow = 3) +
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
                 width = 0, position = position_dodge(width = 0.9)) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
-  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-min",
                                  "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
 # ggsave("C:/RDATA/SPAL_allometry/NAPP14_LUM_byTrainingData.png", width = 8, height= 6, units = "in", dpi = 300)
@@ -434,7 +437,7 @@ ggplot(m.napp[(m.napp$year %in% "2013") & (m.napp$marsh %in% "LUM"), ], aes(x = 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
                 width = 0, position = position_dodge(width = 0.9)) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
-  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", 
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-min",
                                  "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
 # ggsave("C:/RDATA/SPAL_allometry/NAPP13_LUM_byTrainingData.png", width = 8, height= 6, units = "in", dpi = 300)
@@ -442,26 +445,6 @@ ggplot(m.napp[(m.napp$year %in% "2013") & (m.napp$marsh %in% "LUM"), ], aes(x = 
 
 
 
-
-
-
-
-### exploratory plots
-ggplot(spr14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alpha = 0.65) +
-  theme_bw() + facet_grid(type ~ .) + labs(title = "Training data: Spring 2014") +
-  ylim(-2, 7) 
-
-ggplot(sum14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alpha = 0.65) +
-  theme_bw() + facet_grid(type ~ .) + labs(title = "Training data: Summer 2014") +
-  ylim(-2, 7) 
-
-ggplot(fall14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alpha = 0.65) +
-  theme_bw() + facet_grid(type ~ .) + labs(title = "Training data: Fall 2014") +
-  ylim(-2, 7) 
-
-ggplot(wint14[[2]], aes(y = stem.err, x = mass, col = season)) + geom_point( alpha = 0.65) +
-  theme_bw() + facet_grid(type ~ .) + labs(title = "Training data: Winter 2014") +
-  ylim(-2, 7) 
 
 
 

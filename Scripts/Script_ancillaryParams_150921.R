@@ -49,12 +49,19 @@ lit$site      <- gsub(" ", "", as.character(lit$site))
 lit$plot      <- as.character(lit$plot)
 lit$quadrat   <- substr(gsub(" ", "", as.character(lit$quadrat)), 1, 1)
 
-# there are two "A" samples in summer 2014 for LUM1; average them. 
-# this removes two rows, but should  only remove one; not sure what the missing row is
-lit <- ddply(lit, .(monthYear, site, plot, monthYear, moYr, quadrat), summarise,
+
+### add bag scraps (in cwc) to quadrat A's litter (lit)
+head(bagScraps)
+names(bagScraps)  <- c("site", "monthYear", "ID", "type", "hgt", "litterMass", "stemMass", "leafMass", "marsh", "moYr")
+bagScraps$quadrat <- "A"
+bagScraps$site <- as.character(bagScraps$site)
+
+lit <- rbind(lit[, which(names(lit) %in% names(bagScraps))], bagScraps[, which(names(bagScraps) %in% names(lit))])
+
+# average duplicated samples within a quadrat (e.g., from bag scraps and litter) 
+lit <- ddply(lit, .(site, quadrat, monthYear, moYr), summarise,
              litterMass = mean(litterMass, na.rm = T))
-# I'm only interested in quadrat A
-lit <- lit[(lit$quadrat %in% "A"), c("monthYear", "moYr", "site", "litterMass")]
+lit <- marshName(lit)
 
 #####
 
@@ -72,7 +79,7 @@ bg$year   <- as.numeric(substr(as.character(bg$moYr), 5, 8))
 bg <- bg[-c(grep("LUM2", bg$site)[grep("LUM2", bg$site) %in% grep("Jan 2014", as.character(bg$moYr))]), ]
 
 # ignore depth increments for now...
-bg2 <- ddply(bg[, c(1:2, 4:6)], .(site, moYr, year), colwise(sum, na.rm = T))
+bg2 <- ddply(bg[, c(1:2, 4:7)], .(site, moYr, year), colwise(sum, na.rm = T))
 bg2$year   <- as.numeric(substr(as.character(bg2$moYr), 5, 8))
 bg2$live.bg[bg2$live.bg == 0] <- NA # zeroes should be NAs (live/dead material not separated)
 bg2$dead.bg[bg2$dead.bg == 0] <- NA
@@ -143,8 +150,6 @@ nuts$loc     <- ifelse(nuts$loc %in% c("5", "10", "20"), paste0(nuts$loc, "M"), 
 # change "10M" to "20M" for sake of comparisons
 nuts$loc     <- ifelse(nuts$loc %in% c("10M"), "20M", nuts$loc)
 
-unique(nuts$moYr)
-
 
 # write.csv(nuts, file = "C:/RDATA/plantsNutrientData.csv")
 #####
@@ -159,15 +164,14 @@ unique(nuts$moYr)
 ### nutrient data
 ### analysis including all plots (all "marshes")
 m.nuts <- melt(nuts[nuts$loc %in% c("1B", "4B"), 2:ncol(nuts)], id.vars = c("site", "moYr", "loc", "marsh"))
-head(m.nuts)
 
 ggplot(m.nuts, aes(x = as.numeric(moYr), y = value, col = site)) + geom_point() + 
   facet_grid(variable ~ loc, scales = "free_y") + theme_bw() + 
   labs(y = expression("Concentration ("*mu*"M)"), x = "")
 
 ### focus on Bay samples. Aggregate to region-scale and plot with error bars
-nut.prep <- ddply(nuts[nuts$loc %in% c("BAY"), c(2:5, 7, 9)], .(marsh, moYr), colwise(mean, na.rm = T))
-nut.se   <- ddply(nuts[nuts$loc %in% c("BAY"), c(2:5, 7, 9)], .(marsh, moYr), colwise(se))
+nut.prep <- ddply(nuts[nuts$loc %in% c("BAY"), c(2:5, 7, 8)], .(marsh, moYr), colwise(mean, na.rm = T))
+nut.se   <- ddply(nuts[nuts$loc %in% c("BAY"), c(2:5, 7, 8)], .(marsh, moYr), colwise(se))
 m.bay    <- melt(nut.prep, id.vars = c("moYr", "marsh"))
 m.bay.se <- melt(nut.se,   id.vars = c("moYr", "marsh"))
 m.bay$se <- m.bay.se$value
