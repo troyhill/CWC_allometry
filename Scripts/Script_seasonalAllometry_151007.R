@@ -15,8 +15,6 @@ library(knitr)
 # run dependent scripts
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_mergeData_150918.R") # runs CWC_functions.R
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_ancillaryParams_150921.R") # sources no files
-# source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_NAPPCalc_150918.R") # can I avoid running this? 
-
 
 
 
@@ -45,7 +43,7 @@ year <- c(13:15)
 # Seasonal allometry by "region"
 # Get allometry after forming pooled, regional datasets
 # this reduces sample size to 1-3; n = 1 per year
-startVals <- 0.1
+startVals <- 0.2
 ### tdh 151006: why is this producing rows with NA as site?
 for (h in 1:length(unique(cwc$marsh))) {
   targSite <- as.character(unique(cwc$marsh)[h])
@@ -308,30 +306,21 @@ Barre")) +
   facet_grid(seas ~ variable)
 # ggsave("C:/RDATA/SPAL_allometry/allomComparePlots2_150922.png", width = 5, height= 6, units = "in", dpi = 300)
 
-# 
-# 
-# # ANOVAs with unbalanced design. Tukey-Kramer post-hoc test https://stackoverflow.com/questions/12375209/multcomp-tukey-kramer
-# tempData <- plotParams[[1]]
-# tempData <- tempData[!is.na(tempData$exp.live), which(names(tempData) %in% c("exp.live", "season", "seas", "marsh"))]
-# defopt <- options()
-# options(contrasts=c("contr.sum", "contr.poly"))
-# # drop1 explanation: http://www.statmethods.net/stats/anova.html
-# print(drop1(aov(exp.live ~ seas, data = tempData[tempData$marsh %in% "LUM", ]),~.,test="F"))
-# options <- defopt
-# 
-# library(lsmeans) # masks rbind?!?
-# # compare levels of main effects "season"
-# model <- (exp.live ~ marsh * seas)
-# print(lsmeans(aov(exp.live ~ seas, data = tempData[tempData$marsh %in% "LUM", ]), 
-#               list(pairwise ~ seas)), adjust = c("tukey")) # fall-spring are significantly different (p = 0.0084); spring-winter is almost sig. different, p = 0.06 
-# # compare levels of one factor at each level of another factor separately
-# print(lsmeans(aov(exp.live ~ seas * marsh, data = tempData), 
-#               list(pairwise ~ marsh | seas)), adjust = c("tukey")) # in each season, sites are indistinguishable from one another
-# print(lsmeans(aov(exp.live ~ seas * marsh, data = tempData), 
-#               list(pairwise ~ seas | marsh)), adjust = c("tukey")) # at LUM and TB-A, fall-spring are significantly different
 
 
-
+# ANOVAs with unbalanced design and unequal variances. Following Herberich et al. 2010
+library(multcomp)
+library(sandwich) # for HC3 estimator
+library(car) # for Levene's test
+tempData      <- plotParams[[1]][!is.na(plotParams[[1]]$exp.live) & (plotParams[[1]]$marsh %in% "LUM"), c("exp.live", "seas", "marsh")]
+tempData[, 2] <- as.factor(tempData[, 2])
+tempData[, 3] <- as.factor(tempData[, 3])
+leveneTest(exp.live ~ seas, data = tempData)
+amod          <- aov(exp.live ~ seas, data = tempData)
+# glht sets up multiple contrasts. vcov = vcovHC specifies HC3 covariance estimation (for heterogeneous variances) using sandwich package
+amod_glht     <- glht(amod, mcp(seas = "Tukey")) # add ", vcov = vcovHC)" if variances are unequal 
+summary(amod_glht)
+plot(confint(amod_glht))
 
 
 

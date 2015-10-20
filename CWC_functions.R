@@ -936,7 +936,9 @@ labeli <- function(variable, value){
 nappLabelConv <- function(variable, value){
   value <- droplevels(value)
   names_li <- list(
-    "smalley" = "Smalley 1959", "MH" = "Milner Hughes 1968", 
+    "smalley" = "Smalley 1959", 
+    "MH" = "Milner Hughes 1968", 
+    "maxMin" = "Max-Min",
     "VTS" = "Valiela et al. 1975", 
     "psc.live" = "Peak (live)",
     "psc.tot" = "Peak (live + dead)"

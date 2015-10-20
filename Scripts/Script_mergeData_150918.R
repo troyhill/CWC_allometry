@@ -108,6 +108,10 @@ cwc <- cwc[cwc$hgt > 0, ]
 cwc <- cwc[!is.na(cwc$marsh), ]
 cwc <- droplevels(cwc)
 
+# use if temporary data are used
+# exclude: cwc <- cwc$mass[cwc$mass > 0] # or, NA-ify:
+cwc$mass[cwc$mass == 0] <- NA
+
 
 # samples to check:
 # cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), ] # very odd; tiny stem, large mass tin 2131
