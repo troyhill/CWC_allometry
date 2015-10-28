@@ -19,7 +19,7 @@ source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_nondestructiveQuadr
 #####
 
 
-
+ 
 ##### explore data, look for artifacts/errors
 #####
 hist(cwc$hgt)  # looks reasonable

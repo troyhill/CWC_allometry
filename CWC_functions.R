@@ -43,19 +43,8 @@ batch <- function (inputList, fun, ...) {
 }
 
 mergeMonths <- function (dataset_list) {
-  # function formats and merges monthly tab-delimited plant data files
-   
-  # dataset: a dataframe with plant masses, heights etc. 
-  # sitesIncluded: which sites to report data for. "all" (default), "LUM", or "TB"
-  # returnData: should raw data be returned? If "TRUE", 
-  #  output is a list with two elements: allometry parameters and raw data.
-  # combinePlots: if `TRUE`, data from all plots are pooled (if sitesIncluded = "all", all plots are pooled).
-  
-  # error checking
-  countsAsTrue <- c("TRUE", "True", "T", "true")
-  countsAsFalse <- c("FALSE", "False", "F", "false")
-  TB.sites  <- paste0("TB", 1:4)
-  LUM.sites <- paste0("LUM", 1:3)
+  # function formats and merges monthly tab-delimited clip-plot data files from 2014 and 2015
+  # dataset_list: a dataframe with plant masses, heights etc. 
   
   for(j in 1:length(dataset_list)) {
     dataset <- dataset_list[[j]]

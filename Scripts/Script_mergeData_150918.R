@@ -1,5 +1,5 @@
 ###############################
-### Processing LUMCON CWC sites
+### Processing SPAL allometry and productivity data
 ###############################
 
 # This script processes the aboveground plant data for the SPAL allometry project. 

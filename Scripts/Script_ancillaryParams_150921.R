@@ -9,7 +9,7 @@ library(ggplot2)
 ##### load ancillary datasets
 #####
 # litter
-lit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_litter_151017.txt")
+lit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_litter_151020.txt")
 
 # Belowground biomass
 bg <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_belowground_150922.txt", skip = 1)

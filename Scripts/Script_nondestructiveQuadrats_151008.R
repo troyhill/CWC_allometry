@@ -14,7 +14,7 @@ source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_seasonalAllometry_1
 
 
 ### load stem heights
-hgts <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_measuredStems_151008.txt")
+hgts <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_measuredStems_151020.txt")
 head(hgts)
 
 hgts <- marshName(hgts)

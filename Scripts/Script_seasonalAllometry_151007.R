@@ -8,6 +8,9 @@
 library(zoo)
 library(plyr)
 library(knitr)
+library(multcomp) # for glht
+library(sandwich) # for HC3 estimator
+library(car) # for Levene's test
 
 # load custom functions
 # source("C:/RDATA/SPAL_allometry/CWC_allometry/CWC_functions.R") # see https://github.com/troyhill/CWC_allometry/blob/master/CWC_functions.R for updated version
@@ -166,7 +169,7 @@ Fleur", "Lake
 Barre")) + 
   labs(x = "Site (split by season)", y = "Allometry exponent") +
   facet_grid(seas ~ variable)
- ggsave("C:/RDATA/SPAL_allometry/allomCompareRegions_150922.png", width = 5, height= 6, units = "in", dpi = 300)
+#  ggsave("C:/RDATA/SPAL_allometry/allomCompareRegions_150922.png", width = 5, height= 6, units = "in", dpi = 300)
 # Differences don't seem strong enough to support regional differences. 
 
 
@@ -259,7 +262,7 @@ for (h in 1:length(levels(cwc$site))) {
     plotParams <- paramsSite
   }
 }
-sum(!is.na(plotParams[[1]]$exp.live)) # adjust startVals and maximize this number
+sum(!is.na(plotParams[[1]]$exp.live)) # adjust startVals and maximize this number # max 59
 # rm(plotParams)
 
 plotParams[[1]]$seas <- substr(plotParams[[1]]$season, 1, 4)
@@ -309,20 +312,29 @@ Barre")) +
 
 
 # ANOVAs with unbalanced design and unequal variances. Following Herberich et al. 2010
-library(multcomp)
-library(sandwich) # for HC3 estimator
-library(car) # for Levene's test
 tempData      <- plotParams[[1]][!is.na(plotParams[[1]]$exp.live) & (plotParams[[1]]$marsh %in% "LUM"), c("exp.live", "seas", "marsh")]
 tempData[, 2] <- as.factor(tempData[, 2])
 tempData[, 3] <- as.factor(tempData[, 3])
-leveneTest(exp.live ~ seas, data = tempData)
+leveneTest(exp.live ~ seas, data = tempData) # p = 0.12
+# but,  with small sample sizes these tests have low power to detect violations. 
+# boxplots are probably the better means of evaluating variance, or just not to 
+# assume homogenous variances, since I can't justify that assumption by reasoning about the data
+ddply(tempData, .(seas), summarise, exp.live.se = se(exp.live)) # sd varies by a factor of 2.7; se varies by factor of 3.8. I think this justifies 
+n <- table(tempData$seas) # observations per season
+plot(exp.live ~ seas, data = tempData,
+        xlab = "season", ylab = "allometry exponent (live biomass)")
+axis(3, at = 1:4, labels = paste("n = ", n))
+
+
 amod          <- aov(exp.live ~ seas, data = tempData)
-# glht sets up multiple contrasts. vcov = vcovHC specifies HC3 covariance estimation (for heterogeneous variances) using sandwich package
-amod_glht     <- glht(amod, mcp(seas = "Tukey")) # add ", vcov = vcovHC)" if variances are unequal 
+# glht sets up multiple contrasts. vcov = vcovHC specifies heteroscedasticity-consisten estimator of covariance matrix (Herberich et al. 2010)
+amod_glht     <- glht(amod, mcp(seas = "Tukey"), vcov = vcovHC) # remove ", vcov = vcovHC)" if variances are assumed equal 
+coef(amod_glht)
 summary(amod_glht)
 plot(confint(amod_glht))
 
-
+# assuming equal variances: sprg-fall; wint-sprg
+# unequal variances: sprg-fall; sumr-fall; sumr-sprg
 
 
 
