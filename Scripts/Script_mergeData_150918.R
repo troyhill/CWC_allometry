@@ -99,7 +99,7 @@ cwc$type      <- as.character(cwc$type)
 cwc$type      <- toupper(cwc$type)
 
 ### separate "bag scrap" samples
-bagScraps     <- cwc[cwc$ID %in% c("bag scrap", "bag scraps"), ]
+bagScraps     <- cwc[tolower(cwc$ID) %in% c("bag scrap", "bag scraps"), ]
 
 # remove blank lines from data
 # to examine the removed rows:  cwc[c(names(rowSums(is.na(cwc))[rowSums(is.na(cwc)) > 3])), ] 

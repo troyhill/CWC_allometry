@@ -322,7 +322,7 @@ leveneTest(exp.live ~ seas, data = tempData) # p = 0.12
 ddply(tempData, .(seas), summarise, exp.live.se = se(exp.live)) # sd varies by a factor of 2.7; se varies by factor of 3.8. I think this justifies 
 n <- table(tempData$seas) # observations per season
 plot(exp.live ~ seas, data = tempData,
-        xlab = "season", ylab = "allometry exponent (live biomass)")
+     xlab = "season", ylab = "allometry exponent (live biomass)")
 axis(3, at = 1:4, labels = paste("n = ", n))
 
 
@@ -331,13 +331,45 @@ amod          <- aov(exp.live ~ seas, data = tempData)
 amod_glht     <- glht(amod, mcp(seas = "Tukey"), vcov = vcovHC) # remove ", vcov = vcovHC)" if variances are assumed equal 
 coef(amod_glht)
 summary(amod_glht)
-plot(confint(amod_glht))
+plot(confint(amod_glht)) # sprg-fall; sumr-fall; sumr-sprg
 
-# assuming equal variances: sprg-fall; wint-sprg
-# unequal variances: sprg-fall; sumr-fall; sumr-sprg
+explabs <- c("A", "B", "C", "ABC")
+plot(exp.live ~ seas, data = tempData,
+     xlab = "season", ylab = "allometry exponent (live biomass)",
+     ylim = c(1, 3.1), staplewex = 0)
+axis(3, at = 1:4, labels = paste0("n = ", n))
+text(x = 1:4, y = 3.05, explabs)
 
 
 
 
+# Same analysis as above, but for TB-A/B
+tempData      <- plotParams[[1]][!is.na(plotParams[[1]]$exp.live) & (plotParams[[1]]$marsh %in% "TB-B"), c("exp.live", "seas", "marsh")]
+tempData[, 2] <- as.factor(tempData[, 2])
+tempData[, 3] <- as.factor(tempData[, 3])
+leveneTest(exp.live ~ seas, data = tempData) # p = 0.12
+# but,  with small sample sizes these tests have low power to detect violations. 
+# boxplots are probably the better means of evaluating variance, or just not to 
+# assume homogenous variances, since I can't justify that assumption by reasoning about the data
+ddply(tempData, .(seas), summarise, exp.live.se = se(exp.live)) # sd varies by a factor of 2.7; se varies by factor of 3.8. I think this justifies 
+n <- table(tempData$seas) # observations per season
+plot(exp.live ~ seas, data = tempData,
+     xlab = "season", ylab = "allometry exponent (live biomass)")
+axis(3, at = 1:4, labels = paste("n = ", n))
 
 
+amod          <- aov(exp.live ~ seas, data = tempData)
+# glht sets up multiple contrasts. vcov = vcovHC specifies heteroscedasticity-consisten estimator of covariance matrix (Herberich et al. 2010)
+amod_glht     <- glht(amod, mcp(seas = "Tukey"), vcov = vcovHC) # remove ", vcov = vcovHC)" if variances are assumed equal 
+coef(amod_glht)
+summary(amod_glht)
+plot(confint(amod_glht)) # sprg-fall; sumr-fall; sumr-sprg
+
+explabs <- c("A", "B", "C", "ABC") # for TB-A
+explabs <- c("AB", "AB", "A", "B") # for TB-B
+
+plot(exp.live ~ seas, data = tempData,
+     xlab = "season", ylab = "allometry exponent (live biomass)",
+     ylim = c(1, 3.5), staplewex = 0)
+axis(3, at = 1:4, labels = paste0("n = ", n))
+text(x = 1:4, y = 3.45, explabs)

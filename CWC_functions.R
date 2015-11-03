@@ -441,7 +441,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
       subData <- subData1[subData1[, yearCol] %in% targetYear, ]
       if (type %in% "both") {
         PSC_A    <- max(subData[, liveCol], na.rm = T)
-        PSC_B    <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+        PSC_B    <- max(subData[, liveCol], na.rm = T) + subData[, deadCol][subData[, liveCol] == PSC_A]
         if (maxMinIncrement %in% countsAsTrue) {
           maxMin_a <- PSC_A - min(subData[, liveCol], na.rm = T)
           maxMin_b <- PSC_B - min((subData[, liveCol] + subData[, deadCol]), na.rm = T)
@@ -460,7 +460,7 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
           output <- data.frame(site = targetSite, year = targetYear, psc_a = PSC_A)
         }
       } else if (type %in% "PSC-B") {
-        PSC_B  <- max((subData[, liveCol] + subData[, deadCol]), na.rm = T)
+        PSC_B  <- max(subData[, liveCol], na.rm = T) + subData[, deadCol][subData[, liveCol] == max(subData[, liveCol], na.rm = T)]
         if (maxMinIncrement %in% countsAsTrue) {
           maxMin_b <- PSC_B - min((subData[, liveCol] + subData[, deadCol]), na.rm = T)
           output <- data.frame(site = targetSite, year = targetYear, psc_b = PSC_B, maxMin_b = maxMin_b)
@@ -984,3 +984,36 @@ zeroToNA <- function(dataset, cols = c(1:ncol(dataset))) {
   }
   dataset
 }
+
+
+############### a function to make correlation matrices with significance stars
+# from http://myowelt.blogspot.com/2008/04/beautiful-correlation-tables-in-r.html
+# kable(corstarsl(as.matrix(data))) 
+corstarsl <- function(x){
+  require(Hmisc)
+  x <- as.matrix(x)
+  R <- rcorr(x)$r
+  p <- rcorr(x)$P
+  
+  ## define notions for significance levels; spacing is important.
+  mystars <- ifelse(p < .001, "***", ifelse(p < .01, "** ", ifelse(p < .05, "* ", " ")))
+  
+  ## trunctuate the matrix that holds the correlations to two decimal
+  R <- format(round(cbind(rep(-1.11, ncol(x)), R), 2))[,-1]
+  
+  ## build a new matrix that includes the correlations with their apropriate stars
+  Rnew <- matrix(paste(R, mystars, sep=""), ncol=ncol(x))
+  diag(Rnew) <- paste(diag(R), " ", sep="")
+  rownames(Rnew) <- colnames(x)
+  colnames(Rnew) <- paste(colnames(x), "", sep="")
+  
+  ## remove upper triangle
+  Rnew <- as.matrix(Rnew)
+  Rnew[upper.tri(Rnew, diag = TRUE)] <- ""
+  Rnew <- as.data.frame(Rnew)
+  
+  ## remove last column and return the matrix (which is now a data frame)
+  Rnew <- cbind(Rnew[1:length(Rnew)-1])
+  return(Rnew)
+} 
+

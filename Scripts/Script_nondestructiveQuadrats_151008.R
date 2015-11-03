@@ -22,7 +22,7 @@ hgts       <- seasonLabel(hgts)
 hgts$seas  <- substr(hgts$season, 1, 4)
 
 
-### apply plot-specific seasonal allometry (with year-specificity; i.e., "fall 2014 LUM" allometry would be used, rather than the average of all fall LUM1 parameters) to estimate stem masses
+### apply region-year-season-specific seasonal allometry (with year-specificity; i.e., "fall 2014 LUM" allometry would be used, rather than the average of all fall LUM1 parameters) to estimate stem masses
 ### region-season-specific parameters are in params[[1]]; plot-season-specific parameters are in plotParams[[1]]
 hgts$mass <- as.numeric(NA)
 
@@ -46,24 +46,38 @@ for (i in 1:nrow(hgts)) {
 
 
 
-#####
-##### aggregate and combine with clip-plot data in Script_NAPPCalc_151006.R
-#####
-
-
-
-
-
 
 
 #####
-##### Stats
+##### Or, apply plot-season-specific allometry
 #####
-
-# # seasonal allometry parameters are in objects 'plotParams[[1]]' 'seaPlotParams' and 'm.seaPlots'
-# print(lsmeans(aov(exp.live ~ seas, data = tempData[tempData$marsh %in% "LUM", ]), 
-#               list(pairwise ~ seas)), adjust = c("tukey")) # fall-spring are significantly different (p = 0.0084); spring-winter is almost sig. different, p = 0.06 
+# hgts$mass2 <- as.numeric(NA)
 # 
+# for (i in 1:nrow(hgts)) {
+#   # identify plot and season
+#   targetSite <- hgts$site[i]
+#   targetSeas <- hgts$season[i]
+#   
+#   # find seasonal allometry parameters for the region
+#   if (hgts$type[i] %in% "LIVE") {
+#     coefficient <- plotParams[[1]]$coef.live[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
+#     exponent    <- plotParams[[1]]$exp.live[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
+#   } else if (hgts$type[i] %in% "DEAD") {
+#     coefficient <- plotParams[[1]]$coef.dead[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
+#     exponent    <- plotParams[[1]]$exp.dead[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
+#   }
+#   # apply allometry
+#   hgts$mass2[i] <- coefficient * (hgts$hgt[i] ^ exponent) # bam!
+# }
+# 
+# 
+# summary(hgts$mass2)
+# summary(hgts$mass2 - hgts$mass) # pretty minor difference, except 97 more NAs
+# hist(hgts$mass2 - hgts$mass, 200, main = "", xlab = "Disparity between two mass estimates")
+# 
+# t.test(hgts$mass2, hgts$mass)
+# 
+# hgts[is.na(hgts$mass2), ]
 
 
 #####

@@ -42,13 +42,14 @@ chlSyringeVol <- chl_syringeArea * 0.5
 ##### Process litter data
 #####
 # rename columns
-names(lit)    <- c("monthYear", "site", "plot", "quadrat", "plants_tin", "tin", "litterMass")
+names(lit)    <- c("monthYear", "site", "plot", "quadrat", "plants_tin", "tin", "litterMass", "notes")
 lit$moYr      <- as.character(lit$monthYear)
 lit$monthYear <- as.yearmon(lit$moYr, "%b-%y")
 lit$site      <- gsub(" ", "", as.character(lit$site))
 lit$plot      <- as.character(lit$plot)
 lit$quadrat   <- substr(gsub(" ", "", as.character(lit$quadrat)), 1, 1)
-
+lit <- lit[!lit$site %in% "", ]
+lit <- lit[!lit$quadrat %in% "", ]
 
 ### add bag scraps (in cwc) to quadrat A's litter (lit)
 head(bagScraps)

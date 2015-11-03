@@ -18,6 +18,7 @@ library(plyr)
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_nondestructiveQuadrats_151008.R")
 #####
 
+todaysDate <- substr(as.character(Sys.time()), 1, 10)
 
  
 ##### explore data, look for artifacts/errors
@@ -60,9 +61,11 @@ CWC.plots$stems[CWC.plots$type %in% "LITTER"] <- NA
 
 
 ### make sure that an absence of LIVE/DEAD/LITTER has not been interpreted as an absence of sampling
-### Add absent data and set mass = 0
-### code prints "missing" observations, so they can be checked. This could impart a severe downward bias to the data
-nrow(CWC.plots) # 836
+### except when there really wasn't any sampling.
+### Add absent data and set mass = 0 if one of the three data types is reported (live, dead, litter)
+### code prints "missing" observations, so they can be checked. This could impart a severe downward bias to the data, so 
+### make sure this is working properly.
+nrow(CWC.plots) # 971 151028
 for (i in 1:length(unique(CWC.plots$site))) {
   for (j in 1:length(unique(CWC.plots$monthYear))) {
     plot    <- unique(CWC.plots$site)[i]
@@ -71,17 +74,13 @@ for (i in 1:length(unique(CWC.plots$site))) {
     if (nrow(subData) > 0) {
       for (h in 1:length(unique(CWC.plots$quadrat))) {
         subData2 <- subData[subData$quadrat %in% unique(CWC.plots$quadrat)[h], ]
-        ### TODO: MODIFY THIS TO HANDLE MORE CASES; nrow(subData == 2) and check all quadrats
-        if (nrow(subData2) == 0) {
-          fillData         <- subData[1, ]
-          fillData[2:3, ]  <- subData[1, ]
-          fillData$quadrat <- unique(CWC.plots$quadrat)[h]
-          fillData$type    <- c("DEAD", "LIVE", "LITTER")
-          fillData[, grep("mass", names(fillData)):ncol(fillData)]              <- as.numeric(0) # insert NAs from mass column to end of dataset
-          fillData[, (grep("mass", names(fillData)) + 2):ncol(fillData)]        <- as.numeric(NA)
-          fillData[fillData$type %in% "LITTER", grep("stems", names(fillData))] <- as.numeric(NA)
-          CWC.plots        <- rbind(CWC.plots, fillData)
-        } else if (nrow(subData2) < 3) {
+        ### if all three categories are missing for a quadrat, it 
+        ### is most likely that the quadrat simply wasn't sampled.
+         if (nrow(subData2) == 0) {
+           fillData         <- subData[1, ]
+           fillData[1, ]    <- NA
+           CWC.plots        <- rbind(CWC.plots, fillData[complete.cases(fillData)])
+          } else if (nrow(subData2) < 3) {
           # find missing types
           types <- c("LIVE", "DEAD", "LITTER")
           missingTypes <- types[!types %in% subData2$type]
@@ -89,7 +88,7 @@ for (i in 1:length(unique(CWC.plots$site))) {
           fillData                     <- subData2[1, ]
           if (numberMissing > 1) { # if more than one type is missing, add multiple rows
             for (k in 2:numberMissing) {
-              fillData[k, ]            <- subData[1, ]
+              fillData[k, ]            <- subData2[1, ]
             }
           }
           fillData$type                <- missingTypes
@@ -112,11 +111,11 @@ for (i in 1:length(unique(CWC.plots$site))) {
   }
   rownames(CWC.plots) <- 1:nrow(CWC.plots)
 }
-nrow(CWC.plots) # 208 larger (1044)
+nrow(CWC.plots) # 100 larger; 1071
 CWC.plots$year <- paste0("20", substr(as.character(CWC.plots$monthYear), 5, 6))
 # write.csv(CWC.plots, file = "C:/RDATA/SPAL_allometry/CWC_plotData_151008.csv")
 # write.csv(missingData, file = "C:/RDATA/SPAL_allometry/missingData_151008_2.csv") # samples that we are saying has mass = 0
-nrow(missingData) # 208
+nrow(missingData) # 97
 rm(missingData)
 
 ### get plot-level metrics (average across quadrats)
@@ -143,14 +142,14 @@ cwc.ag$time <- as.yearmon(cwc.ag$monthYear, "%b-%y")
 
 
 ### get combined live + dead + litter biomass 
-plot.totals <- ddply(CWC.plots, .(marsh, site, year, season, monthYear), summarise,
+plot.totals <- ddply(CWC.plots, .(marsh, site, quadrat, year, season, monthYear), summarise,
                      biomass.all = sum(mass, na.rm = T),
                      stems.all   = sum(stems, na.rm = T)
 )
 plot.totals$year <- paste0("20", substr(as.character(plot.totals$monthYear), 5, 6))
 
 # convert from long to wide form
-# IMPORTANT DECISION: IS LITTER COUNTED AS DEAD OR AS A SEPARATE CATEGORY?
+# summary stats across quadrats 
 napp <- ddply(CWC.plots, .(marsh, site, year, season, monthYear), summarise,
               live   = mass[type %in% "LIVE"],
               dead   = mass[type %in% "DEAD"],
@@ -204,6 +203,7 @@ nappReplace$dead.se <- totDeadPlots$dead.se
 napp <- nappReplace
 
 ### mean, se by region (for n = 3 sites; could justify using plots as independent replicates)
+### combined live + dead + litter biomass, stem density
 site.tot <- ddply(plot.totals, .(marsh, monthYear), summarise,
                   biomass    = mean(biomass.all, na.rm = T),
                   stems      = mean(stems.all, na.rm = T),
@@ -212,6 +212,8 @@ site.tot <- ddply(plot.totals, .(marsh, monthYear), summarise,
 )
 site.tot$time <- as.yearmon(site.tot$monthYear, "%b-%y")
 
+plot.totals[plot.totals$monthYear %in% "Jun-13", ]
+CWC.plots[CWC.plots$monthYear %in% "Jun-13", ]
 
 #####
 
@@ -226,32 +228,32 @@ site.tot$time <- as.yearmon(site.tot$monthYear, "%b-%y")
 #   theme_bw() + theme(legend.title = element_blank())
 hgt <- 5
 wdh <- 8
-
-panel_plot1(y = "biomass", x = "time", ylab = "biomass (g m-2)")
-# ggsave(file = "C:/RDATA/SPAL_allometry/biomass_151008.png", width = wdh, height = hgt, units = "in")
-
-# september 2015 is extremely high. Were some dead stems classified as "live"?
-cwc.ag[(cwc.ag$marsh %in% "LUM") & (as.character(cwc.ag$time) %in% "Sep 2015"),]
-# appears to be driven by extremely high live biomass in no-clip plots
-# especially: LUM1-B & -C; LUM3-B & -C
-CWC.plots[(CWC.plots$marsh %in% "LUM") & (as.character(CWC.plots$monthYear) %in% "Sep-15"),]
-hist(biomass$hgt[(biomass$site %in% "LUM1") & (biomass$quadrat %in% "A") & (biomass$monthYear %in% "Sep-15")])
-biomass[(biomass$site %in% "LUM1") & (biomass$quadrat %in% "A") & (biomass$monthYear %in% "Sep-15"), ]
-plot(biomass[(biomass$hgt > 100) & (biomass$type %in% "LIVE"), c("mass", "hgt")])
-plot(cwc[(cwc$hgt > 100) & (cwc$type %in% "LIVE"), c("mass", "hgt")]) # a 103 cm stem weighing 1.9 g?!?
-cwc[(cwc$hgt > 100) & (cwc$type %in% "LIVE"), ]
-
-
-
-
-panel_plot1(y = "stemDensity", ylab = "stems per square meter")
-# ggsave(file = "C:/RDATA/SPAL_allometry/stemDensity_151008.png", width = wdh, height = hgt, units = "in")
-
-panel_plot1(y = "lngth.rng", x = "time", ylab = "stem length range")
-# ggsave(file = "C:/RDATA/SPAL_allometry/length3.png", width = wdh, height = hgt, units = "in")
-
-panel_plot1(y = "lngth.med", x = "time", ylab = "median stem length")
-# ggsave(file = "C:/RDATA/SPAL_allometry/length_median.png", width = wdh, height = hgt, units = "in")
+# 
+# panel_plot1(y = "biomass", x = "time", ylab = "biomass (g m-2)")
+# # ggsave(file = "C:/RDATA/SPAL_allometry/biomass_151008.png", width = wdh, height = hgt, units = "in")
+# 
+# # september 2015 is extremely high.
+# cwc.ag[(cwc.ag$marsh %in% "LUM") & (as.character(cwc.ag$time) %in% "Sep 2015"),]
+# # appears to be driven by extremely high live biomass in no-clip plots
+# # especially: LUM1-B & -C; LUM3-B & -C
+# CWC.plots[(CWC.plots$marsh %in% "LUM") & (as.character(CWC.plots$monthYear) %in% "Sep-15"),]
+# hist(biomass$hgt[(biomass$site %in% "LUM1") & (biomass$quadrat %in% "B") & (biomass$monthYear %in% "Sep-15")])
+# biomass[(biomass$site %in% "LUM1") & (biomass$quadrat %in% "A") & (biomass$monthYear %in% "Sep-15"), ]
+# plot(biomass[(biomass$hgt > 100) & (biomass$type %in% "LIVE"), c("mass", "hgt")])
+# plot(cwc[(cwc$hgt > 100) & (cwc$type %in% "LIVE"), c("mass", "hgt")]) # a 103 cm stem weighing 1.9 g?!?
+# cwc[(cwc$hgt > 100) & (cwc$type %in% "LIVE"), ]
+# 
+# 
+# 
+# 
+# panel_plot1(y = "stemDensity", ylab = "stems per square meter")
+# # ggsave(file = "C:/RDATA/SPAL_allometry/stemDensity_151008.png", width = wdh, height = hgt, units = "in")
+# 
+# panel_plot1(y = "lngth.rng", x = "time", ylab = "stem length range")
+# # ggsave(file = "C:/RDATA/SPAL_allometry/length3.png", width = wdh, height = hgt, units = "in")
+# 
+# panel_plot1(y = "lngth.med", x = "time", ylab = "median stem length")
+# # ggsave(file = "C:/RDATA/SPAL_allometry/length_median.png", width = wdh, height = hgt, units = "in")
 
 
 # Only plot LUM, since the other sites are incomplete
@@ -263,11 +265,11 @@ m.cwc$value.se <- m.cwc.se$value
 
 lum <- m.cwc[(m.cwc$marsh %in% "LUM"), ]
 
-ggplot(lum, aes(x = as.numeric(time), y = value, col = type)) + geom_point() + 
+ggplot(lum, aes(x = as.numeric(time), y = value, col = type)) + geom_point(size = 1.25) + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
   facet_grid(variable ~ site, scale = "free_y") + labs(x = "", y = "") + 
   theme_bw() + theme(legend.title = element_blank())
-# ggsave(file = "C:/RDATA/SPAL_allometry/LUM_data_151008.png", width = wdh, height = hgt, units = "in")
+ggsave(file = paste0("C:/RDATA/SPAL_allometry/LUM_data_", todaysDate, ".png"), width = wdh, height = hgt, units = "in")
 
 
 
@@ -276,7 +278,7 @@ x <- "time"
 qplot(y = eval(parse(text = y)), x = as.numeric(eval(parse(text = x))), data = site.tot) + geom_point() + 
   geom_errorbar(aes(ymax = eval(parse(text = y)) + eval(parse(text = paste0(y, ".se"))), 
                     ymin = eval(parse(text = y)) - eval(parse(text = paste0(y, ".se")))), width = 0) +
-  facet_grid(marsh ~ ., scale='free_y') + labs(x = "", y = "") + 
+  facet_grid(marsh ~ ., scale='fixed') + labs(x = "", y = "") + 
   theme_bw() + theme(legend.title = element_blank())
 
 
@@ -290,7 +292,7 @@ ggplot(lum.tot, aes(x = as.numeric(time), y = value)) + geom_point() +
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
   facet_grid(variable ~ ., scale = "free_y", labeller = labeli) + labs(x = "", y = "") + 
   theme_bw() + theme(legend.title = element_blank())
-# ggsave(file = "C:/RDATA/SPAL_allometry/LUM_totData_151008.png", width = wdh, height = hgt, units = "in")
+ggsave(file = paste0("C:/RDATA/SPAL_allometry/LUM_totData_", todaysDate, ".png"), width = wdh, height = hgt, units = "in")
 
 #####
 
@@ -320,12 +322,21 @@ napp2 <- nappCalc(napp, summarize = "TRUE")
 
 napp2$summary
 napp2$summary <- marshName(napp2$summary)
+plot(napp2$summary[, 5:10])
+kable(corstarsl(as.matrix(napp2$summary[, 5:10])))
+
+### this is kind of interesting. Compare with literature values
+for (i in 2013:2015) {
+  yr <- as.character(i)
+  print(kable(corstarsl(as.matrix(napp2$summary[napp2$summary$year == yr, 5:10]))))
+  print(noquote(yr))
+}
+
 
 # compare with separate peak standing crop calculation
 pscInc <- PSC(napp)
-pscInc$turnoverTime_a <- 12 / (pscInc$psc_a / pscInc$maxMin_a)
-pscInc$turnoverTime_b <- 12 / (pscInc$psc_b / pscInc$maxMin_b)
-summary(pscInc$turnoverTime_b[pscInc$turnoverTime_b > 0])
+pscInc
+napp2$summary[, c(1, 2, 7, 9:10)]
 
 # compare productivity estimates
 # first, summarize
@@ -354,9 +365,9 @@ m.napp$value.se  <- m.napp.se$value
 
 # plots comparing sites across different methods
 #####
-ggplot(m.napp[!m.napp$year %in% "2015", ], aes(x = year, y = value, col = marsh)) + geom_point() + 
+ggplot(m.napp, aes(x = year, y = value, col = marsh)) + geom_point() + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
-  facet_grid(variable ~ ., scale = "fixed", labeller = nappLabelConv) + ylim(0, 3500) + 
+  facet_grid(variable ~ ., scale = "fixed", labeller = nappLabelConv) + ylim(0, 4500) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
   theme_bw() + theme(legend.title = element_blank())
 # ggsave("C:/RDATA/SPAL_allometry/NAPP_compare.png", width = 7, height= 7, units = "in", dpi = 300)
@@ -369,7 +380,8 @@ ggplot(m.napp[m.napp$marsh %in% "LUM", ], aes(x = year, y = value, fill = variab
   scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-Min",
            "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
-# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_LUM_151008.png", width = 7, height= 4, units = "in", dpi = 300)
+pngName <- paste0("C:/RDATA/SPAL_allometry/NAPP_compare_LUM_", todaysDate, ".png")
+ggsave(pngName, width = 7, height= 4, units = "in", dpi = 300)
 
 
 
@@ -382,7 +394,8 @@ ggplot(m.napp, aes(x = year, y = value, fill = variable)) +
   scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-Min",
                                  "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
-# ggsave("C:/RDATA/SPAL_allometry/NAPP_compare_allSites_151008.png", width = 6, height= 6, units = "in", dpi = 300)
+pngName <- paste0("C:/RDATA/SPAL_allometry/NAPP_compare_allSites_", todaysDate, ".png")
+ggsave(pngName, width = 7, height= 4, units = "in", dpi = 300)
 #####
 
 
