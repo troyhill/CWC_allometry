@@ -13,7 +13,7 @@ lit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_litter_151020.txt")
 
 # Belowground biomass
 bg <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_belowground_150922.txt", skip = 1)
-bg <- bg[, c(1, 2, 5, 8, 11, 14)]
+bg <- bg[, c(1, 2, 3, 5, 8, 11, 14)]
 
 # moisture/OM content
 om <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_moisture_OM_150917.txt")
@@ -70,20 +70,23 @@ lit <- marshName(lit)
 #####
 
 ### belowground biomass data
-names(bg) <- c("moYr", "site", "depth", "live.bg", "dead.bg", "total.bg")
+names(bg) <- c("moYr", "site", "quadrat", "depth", "live.bg", "dead.bg", "total.bg")
 bg$moYr   <- as.yearmon(bg$moYr, "%b-%y")
 bg$site   <- gsub(" ", "", as.character(bg$site))
 bg$depth  <- gsub(" ", "", as.character(bg$depth))
-bg[, 4:6] <- bg[, 4:6] / coreTube * 10^4 # mass per m2
+bg[, 5:7] <- bg[, 5:7] / coreTube * 10^4 # mass per m2
 bg$year   <- as.numeric(substr(as.character(bg$moYr), 5, 8))
 # remove suspicious LUM2 samples from Jan 2014
 bg <- bg[-c(grep("LUM2", bg$site)[grep("LUM2", bg$site) %in% grep("Jan 2014", as.character(bg$moYr))]), ]
 
-# ignore depth increments for now...
-bg2 <- ddply(bg[, c(1:2, 4:7)], .(site, moYr, year), colwise(sum, na.rm = T))
+# intermediate summary file gets totals per quadrat. Then, average out data from replicate quadrats (reps were taken only during summer 2013)
+bg_int <- ddply(bg[, c("moYr", "site", "quadrat", "live.bg", "dead.bg", "total.bg", "year")], .(site, quadrat, moYr, year), colwise(sum, na.rm = T))
+
+
+# now get site totals, ignoring depth increments for now...
+bg2 <- ddply(bg_int[, c("moYr", "site", "live.bg", "dead.bg", "total.bg", "year")], .(site, moYr, year), colwise(mean, na.rm = T))
 bg2$year   <- as.numeric(substr(as.character(bg2$moYr), 5, 8))
-bg2$live.bg[bg2$live.bg == 0] <- NA # zeroes should be NAs (live/dead material not separated)
-bg2$dead.bg[bg2$dead.bg == 0] <- NA
+bg2 <- zeroToNA(bg2) # zeroes should really be NAs (live/dead material not separated)
 
 
 ### organic matter, water content data

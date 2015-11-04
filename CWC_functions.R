@@ -5,13 +5,13 @@ marshName <- function(data, siteCol = "site") {
   # function takes a dataset and the name of the column with site names (e.g., "LUM1"), and 
   # adds a column with marsh names ("LUM", "TB-A", "TB-B")
   tempData <- data
-  tempData$marsh <- NA
+  tempData$marsh <- as.character(NA)
   for (i in 1:nrow(tempData)) {
-    if (tempData[, siteCol][i] %in% paste0("LUM", 1:3)) {
+    if (tempData[i, siteCol] %in% paste0("LUM", 1:3)) {
       tempData$marsh[i] <- "LUM"    
-    } else if (tempData[, siteCol][i] %in% c("TB1", "TB2")) {
+    } else if (tempData[i, siteCol] %in% c("TB1", "TB2")) {
       tempData$marsh[i] <- "TB-A"
-    } else if (tempData[, siteCol][i] %in% c("TB3", "TB4")) {
+    } else if (tempData[i, siteCol] %in% c("TB3", "TB4")) {
       tempData$marsh[i] <- "TB-B"
     }
   }
@@ -986,9 +986,9 @@ zeroToNA <- function(dataset, cols = c(1:ncol(dataset))) {
 }
 
 
-############### a function to make correlation matrices with significance stars
-# from http://myowelt.blogspot.com/2008/04/beautiful-correlation-tables-in-r.html
-# kable(corstarsl(as.matrix(data))) 
+### a function to make correlation matrices with significance stars
+### from http://myowelt.blogspot.com/2008/04/beautiful-correlation-tables-in-r.html
+### usage: kable(corstarsl(as.matrix(data))) 
 corstarsl <- function(x){
   require(Hmisc)
   x <- as.matrix(x)
@@ -1016,4 +1016,16 @@ corstarsl <- function(x){
   Rnew <- cbind(Rnew[1:length(Rnew)-1])
   return(Rnew)
 } 
+
+
+### A function to create a unique ID column in a dataset, based on combinations of input columns
+createUniqueID <- function (dataset, inputColNames) {
+  n <- length(inputColNames)
+  ID_col <- as.character(dataset[, inputColNames[1]])
+  for (i in 2:n) {
+    ID_col <- paste0(ID_col, "-", as.character(dataset[, inputColNames[i]]))
+  }
+  ID_col
+}
+
 

@@ -65,7 +65,7 @@ CWC.plots$stems[CWC.plots$type %in% "LITTER"] <- NA
 ### Add absent data and set mass = 0 if one of the three data types is reported (live, dead, litter)
 ### code prints "missing" observations, so they can be checked. This could impart a severe downward bias to the data, so 
 ### make sure this is working properly.
-nrow(CWC.plots) # 971 151028
+nrow(CWC.plots) # 10211 151103
 for (i in 1:length(unique(CWC.plots$site))) {
   for (j in 1:length(unique(CWC.plots$monthYear))) {
     plot    <- unique(CWC.plots$site)[i]
@@ -111,11 +111,11 @@ for (i in 1:length(unique(CWC.plots$site))) {
   }
   rownames(CWC.plots) <- 1:nrow(CWC.plots)
 }
-nrow(CWC.plots) # 100 larger; 1071
+nrow(CWC.plots) # 50 larger; 1071
 CWC.plots$year <- paste0("20", substr(as.character(CWC.plots$monthYear), 5, 6))
 # write.csv(CWC.plots, file = "C:/RDATA/SPAL_allometry/CWC_plotData_151008.csv")
 # write.csv(missingData, file = "C:/RDATA/SPAL_allometry/missingData_151008_2.csv") # samples that we are saying has mass = 0
-nrow(missingData) # 97
+nrow(missingData) # 50
 rm(missingData)
 
 ### get plot-level metrics (average across quadrats)
@@ -297,6 +297,42 @@ ggsave(file = paste0("C:/RDATA/SPAL_allometry/LUM_totData_", todaysDate, ".png")
 #####
 
 
+
+##### Combine and explore above and belowground datasets
+#####
+head(bg2)
+head(cwc.ag)
+cwc.ag2 <- cwc.ag
+
+bg2$ID <- createUniqueID(bg2, c("site", "moYr"))
+napp$ID <- createUniqueID(napp, c("site", "time"))
+cwc.ag2$ID <- createUniqueID(cwc.ag2, c("site", "time"))
+cwc.ag2$year <- as.numeric(cwc.ag2$year)
+combd <- join_all(list(napp, bg2[, -c(1:3)]), by = "ID") # should maybe combine with cwc.ag or CWC.plots?? 
+
+bg2_tmp <- bg2[, c(1:3, 6:7)]
+bg2_tmp$type <- "BELOWGRD"
+bg2_tmp$time <- as.numeric(bg2_tmp$moYr)
+names(bg2_tmp)[4] <- "biomass"
+comb <- bind_rows(list(cwc.ag2, bg2_tmp))
+comb <- marshName(comb[, -1])
+
+m.comb    <- melt(comb, id.vars = c("marsh", "site", "year", "time", "type"), 
+                 measure.vars = names(comb)[6:9])
+m.comb.se <- melt(comb, id.vars = c("marsh", "site", "year", "time", "type"), 
+                 measure.vars = names(comb)[10:13])
+m.comb$value.se <- m.comb.se$value
+
+comb.lum <- m.comb[(m.comb$marsh %in% "LUM"), ]
+
+ggplot(comb.lum[comb.lum$variable %in% "biomass", ], aes(x = as.numeric(time), y = value)) + geom_point(size = 1.25) + 
+  geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se), width = 0) +
+  facet_grid(type ~ site, scale = "free_y") + labs(x = "", y = "") + 
+  theme_bw() + theme(legend.title = element_blank())
+ggsave(file = paste0("C:/RDATA/SPAL_allometry/LUM_biomassTrends_", todaysDate, ".png"), width = wdh, height = hgt, units = "in")
+
+
+
 ##### Compare standing crop estimates
 #####
 ### 1) peak standing crop (max standing biomass (PSC-A: live and PSC-B: live + dead); Linthurst and Reimold 1978 use only live
@@ -323,12 +359,16 @@ napp2 <- nappCalc(napp, summarize = "TRUE")
 napp2$summary
 napp2$summary <- marshName(napp2$summary)
 plot(napp2$summary[, 5:10])
-kable(corstarsl(as.matrix(napp2$summary[, 5:10])))
+# correlations for LUM (2013 & 2014)
+kable(corstarsl(as.matrix(napp2$summary[((napp2$summary$year != 2015) & (napp2$summary$marsh %in% "LUM")), 5:10])))
+
+# correlations for all sites (2013 & 2014)
+kable(corstarsl(as.matrix(napp2$summary[((napp2$summary$year != 2015)), 5:10])))
 
 ### this is kind of interesting. Compare with literature values
 for (i in 2013:2015) {
   yr <- as.character(i)
-  print(kable(corstarsl(as.matrix(napp2$summary[napp2$summary$year == yr, 5:10]))))
+  print(kable(corstarsl(as.matrix(napp2$summary[(napp2$summary$year == yr), 5:10]))))
   print(noquote(yr))
 }
 
@@ -387,7 +427,7 @@ ggsave(pngName, width = 7, height= 4, units = "in", dpi = 300)
 
 
 ggplot(m.napp, aes(x = year, y = value, fill = variable)) + 
-  geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ .) +
+  geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ ., scale = "free_y") +
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
                 width = 0, position = position_dodge(width = 0.9)) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
@@ -395,7 +435,7 @@ ggplot(m.napp, aes(x = year, y = value, fill = variable)) +
                                  "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
 pngName <- paste0("C:/RDATA/SPAL_allometry/NAPP_compare_allSites_", todaysDate, ".png")
-ggsave(pngName, width = 7, height= 4, units = "in", dpi = 300)
+ggsave(pngName, width = 6, height= 6, units = "in", dpi = 300)
 #####
 
 
@@ -416,11 +456,18 @@ names(bgInc)[3:5] <- paste0("bg_", names(bgInc)[3:5])
 napp2$summary$siteYr <- paste0(pscInc$site, "-", pscInc$year)
 bgInc$siteYr <- paste0(bgInc$site, "-", bgInc$year)
 
-abpp <- join_all(list(napp2$summary, pscInc[, c(5:9)], bgInc[, 3:6]), by = "siteYr")
+abpp <- join_all(list(napp2$summary, bgInc[, 3:6]), by = "siteYr")
 summary(abpp)
 abpp <- zeroToNA(abpp)
-abpp$rtToSht <- abpp$bg_maxMin_a / abpp$napp.psc.b
-summary(abpp[as.character(abpp$year) %in% c("2014"), ])
+abpp$year <- as.numeric(abpp$year)
+abpp$rtToSht <- abpp$bg_maxMin_a / abpp$napp.psc.b # ratio of below:aboveground productivity (0.5 - 6x)
+summary(abpp)
+
+
+qplot(y = rtToSht, x = year, data = abpp, col = site)
+ddply(abpp[, c(2:11, 17, 19:20, 22)], .(marsh, year), numcolwise(mean))
+ddply(abpp[, c(2:11, 17, 19:20, 22)], .(marsh, year), numcolwise(se))
+
 
 #####
 
