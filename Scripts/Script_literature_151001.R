@@ -1,5 +1,11 @@
 ### script re-calculates NAPP data from literature
 
+
+nappLit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_literatureNAPP_151105.txt", skip = 1)
+
+kable(corstarsl(as.matrix(nappLit[-c(4, 25:nrow(nappLit)), c(12, 11, 10, 15, 8, 9)])))
+plot(nappLit[-c(4, 25:nrow(nappLit)), c(12, 11, 10, 15, 8, 9)])
+
 salit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_literatureValues_150930_.txt")
 salit$moYr <- as.yearmon(paste0(substr(salit$month, 1, 3), "-", salit$year), "%b-%Y")
 salit$julian <- julian(as.POSIXct(salit$moYr), origin = as.POSIXct("1970-01-01", tz = "GMT"))

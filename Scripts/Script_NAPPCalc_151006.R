@@ -13,6 +13,7 @@
 # library(ggplot2)
 library(reshape2)
 library(plyr)
+library(dplyr)
 # 'cwc' object has compiled raw allometry data
 # run scripts that this code depends on:
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_nondestructiveQuadrats_151008.R")
@@ -316,6 +317,12 @@ bg2_tmp$time <- as.numeric(bg2_tmp$moYr)
 names(bg2_tmp)[4] <- "biomass"
 comb <- bind_rows(list(cwc.ag2, bg2_tmp))
 comb <- marshName(comb[, -1])
+comb$numTime <- as.numeric(comb$time)
+
+comb.ag <- ddply(comb[comb$type %in% "BELOWGRD", ], .(marsh, year, numTime), summarise,
+                 MOM        =  mean(biomass, na.rm = T),
+                 MOM.se     =  se(biomass))
+
 
 m.comb    <- melt(comb, id.vars = c("marsh", "site", "year", "time", "type"), 
                  measure.vars = names(comb)[6:9])
@@ -331,6 +338,26 @@ ggplot(comb.lum[comb.lum$variable %in% "biomass", ], aes(x = as.numeric(time), y
   theme_bw() + theme(legend.title = element_blank())
 ggsave(file = paste0("C:/RDATA/SPAL_allometry/LUM_biomassTrends_", todaysDate, ".png"), width = wdh, height = hgt, units = "in")
 
+
+summary(lm1 <- lm(I(bg2$live.bg / 1e3) ~ I(bg2$total.bg / 1e3)))
+plot(I(bg2$live.bg / 1e3) ~ I(bg2$total.bg / 1e3), 
+     ylab = expression("live biomass (kg"%.%"m"^-2~")"),
+     xlab = expression("total biomass (kg"%.%"m"^-2~")"),
+     pch = 19, cex = 0.7, las = 1
+)
+abline(lm1, col = "red")
+
+summary((bg2$live.bg / 1e3) / (bg2$total.bg / 1e3))
+summary((bg2$live.bg / 1e3) / (bg2$dead.bg / 1e3))
+
+
+plot(I(MOM / 1e3) ~ numTime, data = comb.ag[comb.ag$marsh %in% "LUM",],
+     ylab = expression("total belowground biomass (kg"%.%"m"^-2~")"),
+     xlab = expression(""),
+     pch = 19, cex = 0.7, las = 1,
+     ylim = c(0, 10)
+)
+segments(comb.ag$numTime[comb.ag$marsh %in% "LUM"], I((comb.ag$MOM[comb.ag$marsh %in% "LUM"] + comb.ag$MOM.se[comb.ag$marsh %in% "LUM"]) / 1e3), comb.ag$numTime[comb.ag$marsh %in% "LUM"], I((comb.ag$MOM[comb.ag$marsh %in% "LUM"] - comb.ag$MOM.se[comb.ag$marsh %in% "LUM"]) / 1e3))
 
 
 ##### Compare standing crop estimates
@@ -356,11 +383,13 @@ ggsave(file = paste0("C:/RDATA/SPAL_allometry/LUM_biomassTrends_", todaysDate, "
 # "dead" column in napp is the sum of standing dead and litter
 napp2 <- nappCalc(napp, summarize = "TRUE")
 
-napp2$summary
+# napp2$summary
 napp2$summary <- marshName(napp2$summary)
 plot(napp2$summary[, 5:10])
 # correlations for LUM (2013 & 2014)
 kable(corstarsl(as.matrix(napp2$summary[((napp2$summary$year != 2015) & (napp2$summary$marsh %in% "LUM")), 5:10])))
+
+kable(corstarsl(as.matrix(napp2$summary[napp2$summary$marsh %in% "LUM", 5:10])))
 
 # correlations for all sites (2013 & 2014)
 kable(corstarsl(as.matrix(napp2$summary[((napp2$summary$year != 2015)), 5:10])))
