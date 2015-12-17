@@ -7,8 +7,6 @@
 
 # Notes:
 # the 2013 data are organized by plot, whereas the 2014/2015 data are organized by month.
-# I exclude "bag scraps" and downed litter from this analysis. Perhaps it can be incorporated in the 
-# future
 
 # install.packages(c("zoo", "plyr")) # if 'zoo' and 'plyr' aren't installed.
 library(zoo)
@@ -112,6 +110,7 @@ cwc <- droplevels(cwc)
 # exclude: cwc <- cwc$mass[cwc$mass > 0] # or, NA-ify:
 cwc$mass[cwc$mass == 0] <- NA
 
+cwc[(cwc$hgt < 20) & (cwc$mass > 1), ]
 
 # samples to check:
 # cwc[(cwc$monthYear %in% "Jun-14") & (cwc$hgt < 5), ] # very odd; tiny stem, large mass tin 2131

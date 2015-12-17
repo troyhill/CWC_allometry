@@ -87,7 +87,7 @@ mergeMonths <- function (dataset_list) {
   outputDF
 }
 
-proc_CWC_files <- function (dataset, 
+proc_CWC_files <- function (dataset, startVals = 0.2,
                             ExcelParameterFile = "C:/RDATA/SPAL_allometry/data_LUM123/data_CWC_oldCoeffs_150821.txt") {
   # function returns parameters for exponential fits (and diagnostic plots, saved to working directory)
   # file structure changed in May 2015...
@@ -127,7 +127,7 @@ proc_CWC_files <- function (dataset,
     returnVals[paste0("LUM", i, ".R.coef")] <- coefs[1]
     returnVals[paste0("LUM", i, ".R.exp")]  <- coefs[2]
     returnVals[paste0("LUM", i, ".R.MSE")]  <- sum(squared_error, na.rm = T)
-    returnVals[paste0("LUM", i, ".R.corr")] <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
+    returnVals[paste0("LUM", i, ".R.corr")] <- 1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2))
     
     
     oldParams <- read.delim(ExcelParameterFile, skip = 1)
@@ -148,9 +148,131 @@ proc_CWC_files <- function (dataset,
   returnVals
 }
 
-getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
-                                returnData = "FALSE", combinePlots = "FALSE", 
-                                cutOff = 5, nlsStartVals = 0.1) {
+
+getParams <- function (dataset, massCol = "mass", heightCol = "hgt", typeCol = "type", 
+                       cutOff = 5, startVals = 0.2,
+                       timeName = NA, dataName = NA,
+                       returnPlot = FALSE, savePlot = FALSE, plotTitle = NA) {
+  # returnPlot: live stems are on the left, dead are on right
+  # typeCol: column indicating live/dead status
+  # a stream-lined workhorse of getAllometryParams. Generates live/dead allometry parameters for whatever dataset it's fed. 
+  # really, this is just a wrapper for nls().
+  # getParams(cwc[(cwc$season %in% "sprg 13") & (cwc$marsh %in% "LUM"), ])
+  # getParams(cwc[(cwc$season %in% "sprg 13") & (cwc$marsh %in% "LUM"), ], returnPlot = TRUE)
+  # getParams(cwc[(cwc$season %in% "sprg 13") & (cwc$marsh %in% "LUM"), ], returnPlot = TRUE, plotTitle = "sprg 13")
+  
+  returnVals <- data.frame(time.period = timeName, 
+                           data.name = dataName,
+                           coef.live = as.numeric(NA), exp.live = as.numeric(NA),
+                           MSE.live = as.numeric(NA), r.live = as.numeric(NA),
+                           coef.dead = as.numeric(NA), exp.dead = as.numeric(NA),
+                           MSE.dead = as.numeric(NA), r.dead = as.numeric(NA)
+  )
+  
+  x          <- dataset[, heightCol][tolower(dataset[, typeCol]) %in% "live"]
+  y          <- dataset[, massCol][tolower(dataset[, typeCol]) %in% "live"]
+  x.dead     <- dataset[, heightCol][tolower(dataset[, typeCol]) %in% "dead"]
+  y.dead     <- dataset[, massCol][tolower(dataset[, typeCol]) %in% "dead"]
+  
+  # get live biomass parameters
+  if (length(x) < cutOff) {
+    returnVals$coef.live <- as.numeric(NA)
+    returnVals$exp.live  <- as.numeric(NA)
+    returnVals$MSE.live  <- as.numeric(NA)
+    returnVals$r.live    <- as.numeric(NA)
+  } else {
+    coefs      <- coef(model <- nls(y ~ I(a * x^b), start = list(a = startVals, b = startVals)))
+    predicted                <- coefs[1] * x^coefs[2]
+    squared_error            <- (predicted - y)^2
+    returnVals$coef.live  <- coefs[1]
+    returnVals$exp.live   <- coefs[2]
+    returnVals$MSE.live   <- mean(squared_error, na.rm = T)
+    returnVals$r.live     <- 1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2))
+  }
+  
+  # get dead biomass parameters
+  if (length(x.dead) < cutOff) {
+    returnVals$coef.dead <- as.numeric(NA)
+    returnVals$exp.dead  <- as.numeric(NA)
+    returnVals$MSE.dead  <- as.numeric(NA)
+    returnVals$r.dead    <- as.numeric(NA)
+  } else {
+    coefs      <- coef(model <- nls(y.dead ~ I(a * x.dead^b), start = list(a = startVals, b = startVals)))
+    predicted                <- coefs[1] * x.dead^coefs[2]
+    squared_error            <- (predicted - y.dead)^2
+    returnVals$coef.dead  <- coefs[1]
+    returnVals$exp.dead   <- coefs[2]
+    returnVals$MSE.dead   <- mean(squared_error, na.rm = T)
+    returnVals$r.dead     <- 1 - (deviance(model)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2))
+  }
+  
+  if (returnPlot == TRUE) {
+    if (savePlot == TRUE) {
+      fileName = paste0("Allom-", Sys.time(), ".png")
+      png(filename = fileName, width = 15, height = 8, units = "cm", res = 300)
+    }
+    living <- c("Live", "coef.live", "exp.live", "live")
+    dying <- c("Dead", "coef.dead", "exp.dead", "dead")
+    
+    par(mar = c(4, 4, 0.3, 0.5), fig = c(0, 0.48, 0, 1))
+    biomassType <- "live"
+    if (!is.na(plotTitle)) {
+      title_of_plot <- paste0(plotTitle, ": live stems")
+    } else {
+      title_of_plot <- ""
+    }
+    plot(dataset[, massCol] ~ dataset[, heightCol],
+         ylab = "mass (g)", xlab = "height (cm)",
+         type = "n", las = 1, xlim = c(0, max(dataset[, heightCol], na.rm = T)),
+         ylim = c(0, max(dataset[, massCol], na.rm = T)))
+    
+      points(x = dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], 
+             y = dataset[, massCol][tolower(dataset[, typeCol]) %in% biomassType], 
+             pch = 19, cex = 0.8, las = 1)
+      # predicted values
+      min.x <- min(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
+      max.x <- max(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
+      xVals <- c((min.x * 100):(max.x * 100)) / 100
+      modeled <- returnVals[1, paste0("coef.", biomassType)] * xVals ^ (returnVals[1, paste0("exp.", biomassType)])
+      lines(x = xVals, y = modeled, lty = i, col = "red")
+      text(x = median(dataset[, heightCol], na.rm = T), y = 0.7 * max(dataset[, massCol], na.rm = T), 
+           cex = 0.85, title_of_plot)
+      
+      biomassType <- "dead"
+      if (!is.na(plotTitle)) {
+        title_of_plot <- paste0(plotTitle, ": dead stems")
+      } else {
+        title_of_plot <- ""
+      }
+    par(mar = c(4, 4, 0.3, 0.5), fig = c(0.5, 1, 0, 1), new = T)
+    plot(dataset[, massCol] ~ dataset[, heightCol],
+         ylab = "mass (g)", xlab = "height (cm)",
+         type = "n", las = 1, xlim = c(0, max(dataset[, heightCol], na.rm = T)),
+         ylim = c(0, max(dataset[, massCol], na.rm = T)))
+    
+    points(x = dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], 
+           y = dataset[, massCol][tolower(dataset[, typeCol]) %in% biomassType], 
+           pch = 19, cex = 0.8, las = 1)
+    # predicted values
+    min.x <- min(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
+    max.x <- max(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
+    xVals <- c((min.x * 100):(max.x * 100)) / 100
+    modeled <- returnVals[1, paste0("coef.", biomassType)] * xVals ^ (returnVals[1, paste0("exp.", biomassType)])
+    lines(x = xVals, y = modeled, lty = i, col = "red")
+    text(x = median(dataset[, heightCol], na.rm = T), y = 0.7 * max(dataset[, massCol], na.rm = T), 
+         cex = 0.85, title_of_plot)
+    if (savePlot == TRUE) {
+      dev.off()
+    }
+  }
+  
+  
+  returnVals
+}
+
+
+getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1", siteCol = "site",
+                                returnData = "FALSE", combinePlots = "FALSE", cutOff = 5, ...) {
   # function returns parameters for exponential fits (and diagnostic plots, saved to working directory)
   # for each plot. Time span used for parameterization is the entire dataset.
   
@@ -158,9 +280,12 @@ getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
   # sitesIncluded: which sites to report data for. "all" (default), "LUM", or "TB"
   # returnData: should raw data be returned? If "TRUE", 
   #  output is a list with two elements: allometry parameters and raw data.
-  # combinePlots: if `TRUE`, data from all plots are pooled (if sitesIncluded = "all", all plots are pooled).
+  # combinePlots: if `TRUE`, data from all plots are pooled (if sitesIncluded = "all", all plots are pooled). "plot" value will then include all combined plots. 
   # timeName: name of time period covered by dataset
   # cutOff: minimum number of observations to generate an allometric relationship
+  
+  # getParams(cwc[(cwc$season %in% "sprg 13") & (cwc$marsh %in% "LUM"), ])
+  # getAllometryParams(cwc[(cwc$season %in% "sprg 13") & (cwc$marsh %in% "LUM"), ], combinePlots = "TRUE")
   
   # error checking
   countsAsTrue <- c("TRUE", "True", "T", "true")
@@ -199,21 +324,21 @@ getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
 #   
   # check site exclusion flag
   if ((sitesIncluded %in% "all") & (combinePlots %in% countsAsFalse)) {
-    plotsInData <- levels(dataset$site)[levels(dataset$site) %in% c(TB.sites, LUM.sites)]
+    plotsInData <- unique(dataset$site)[unique(dataset$site) %in% c(TB.sites, LUM.sites)]
   } else if ((sitesIncluded %in% "all") & (combinePlots %in% countsAsTrue)) {
     # list all plots merged, if plots are being merged
-    plotsInData <- paste0(levels(dataset$site)[levels(dataset$site) %in% c(TB.sites, LUM.sites)], collapse = " ")
+    plotsInData <- paste0(unique(dataset$site)[unique(dataset$site) %in% c(TB.sites, LUM.sites)], collapse = " ")
   } else if ((sitesIncluded %in% "LUM") & (combinePlots %in% countsAsFalse)) {
-    plotsInData <- levels(dataset$site)[levels(dataset$site) %in% LUM.sites]
+    plotsInData <- unique(dataset$site)[unique(dataset$site) %in% LUM.sites]
     dataset <- dataset[dataset$site %in% LUM.sites, ]
   } else if ((sitesIncluded %in% "TB") & (combinePlots %in% countsAsFalse))  {
-    plotsInData <- levels(dataset$site)[levels(dataset$site) %in% TB.sites]
+    plotsInData <- unique(dataset$site)[unique(dataset$site) %in% TB.sites]
     dataset <- dataset[dataset$site %in% TB.sites, ]
   } else if ((sitesIncluded %in% "LUM") & (combinePlots %in% countsAsTrue)) {
-    plotsInData <- paste0(levels(dataset$site)[levels(dataset$site) %in% LUM.sites], collapse = " ")
+    plotsInData <- paste0(unique(dataset$site)[unique(dataset$site) %in% LUM.sites], collapse = " ")
     dataset <- dataset[dataset$site %in% LUM.sites, ]
   } else if ((sitesIncluded %in% "TB") & (combinePlots %in% countsAsTrue)) {
-    plotsInData <- paste0(levels(dataset$site)[levels(dataset$site) %in% TB.sites], collapse = " ")
+    plotsInData <- paste0(unique(dataset$site)[unique(dataset$site) %in% TB.sites], collapse = " ")
     dataset <- dataset[dataset$site %in% TB.sites, ]
   }
   
@@ -233,7 +358,7 @@ getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
     sitesInData <- unique(siteOnly)
     
     # set number of rows in allometry parameter file
-    # if all sites are selected, this step begins to combine  their data
+    # if all sites are selected, this step begins to combine their data
     if ((combinePlots %in% countsAsTrue) & (sitesIncluded %in% "all")) {
       n <- 1
     } else if ((combinePlots %in% countsAsTrue) & (!sitesIncluded %in% "all")) {
@@ -249,6 +374,7 @@ getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
                              coef.dead = rep(as.numeric(NA), times = n), exp.dead = rep(as.numeric(NA), times = n), 
                              MSE.dead = rep(as.numeric(NA), times = n), r.dead = rep(as.numeric(NA), times = n)
     )    
+    mergeMarker <- grep("coef.live", names(returnVals))
     
     for (i in 1:n) {
       if (combinePlots %in% countsAsTrue) {
@@ -273,44 +399,9 @@ getAllometryParams <- function (dataset, sitesIncluded = "all", timeName = "1",
       }
       
       ### data subset by type
-      x          <- dataset$hgt[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
-      y          <- dataset$mass[(dataset$type %in% c("Live", "LIVE", "live")) & (dataset$site %in% siteName)]
-      x.dead     <- dataset$hgt[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]
-      y.dead     <- dataset$mass[(dataset$type %in% c("Dead", "DEAD", "dead")) & (dataset$site %in% siteName)]     
+      subDat       <- dataset[dataset[, siteCol] %in% siteName, ]
+      returnVals[i, mergeMarker:ncol(returnVals)] <- getParams(subDat, ...)[3:10] # magic numbers. replace 3:10 with -c(1:2)
       
-      if (length(x) < cutOff) {
-        returnVals$coef.live[i] <- as.numeric(NA)
-        returnVals$exp.live[i]  <- as.numeric(NA)
-        returnVals$MSE.live[i]  <- as.numeric(NA)
-        returnVals$r.live[i]    <- as.numeric(NA)
-      } else {
-        coefs      <- coef(model <- nls(y ~ I(a * x^b), start = list(a = nlsStartVals, b = nlsStartVals)))
-        predicted                <- coefs[1] * x^coefs[2]
-        squared_error            <- (predicted - y)^2
-        returnVals$coef.live[i]  <- coefs[1]
-        returnVals$exp.live[i]   <- coefs[2]
-        returnVals$MSE.live[i]   <- sum(squared_error, na.rm = T)
-        returnVals$r.live[i]     <- sqrt(1 - (deviance(model)  / sum((y[!is.na(y)] - mean(y, na.rm = T))^2)))
-      }
-      
-      # do the same for dead stems, if there's more than two stems
-     if (length(x.dead) < cutOff) {
-        returnVals$coef.dead[i] <- as.numeric(NA)
-        returnVals$exp.dead[i]  <- as.numeric(NA)
-        returnVals$MSE.dead[i]  <- as.numeric(NA)
-        returnVals$r.dead[i]    <- as.numeric(NA)
-      } else {
-        coefs.dead <- coef(model.dead <- nls(y.dead ~ I(a * x.dead^b), start = list(a = nlsStartVals, b = nlsStartVals)))
-        
-        predicted.dead      <- coefs.dead[1] * x.dead^coefs.dead[2]
-        squared_error.dead  <- (predicted.dead - y.dead)^2
-        
-        
-        returnVals$coef.dead[i] <- coefs.dead[1]
-        returnVals$exp.dead[i]  <- coefs.dead[2]
-        returnVals$MSE.dead[i]  <- sum(squared_error.dead, na.rm = T)
-        returnVals$r.dead[i]    <- sqrt(1 - (deviance(model.dead)  / sum((y.dead[!is.na(y.dead)] - mean(y.dead, na.rm = T))^2)))
-      }
     }
   }
   if (returnData %in% countsAsFalse) {
@@ -879,6 +970,8 @@ panel_plot1 <- function(y, x = "time", ylab = "") {
 }
 
 seasonLabel <- function(data, monthYearColumn = "moYr", siteColumn = "site", seasons = NA, year = c(13:15)) {
+  # labels each row's season. 'monthYearColumn' should be of the form %b-%y
+  
   if(is.na(seasons)) {
     seasons <- list(
       # spring: Mar Apr May
@@ -986,6 +1079,7 @@ zeroToNA <- function(dataset, cols = c(1:ncol(dataset))) {
 }
 
 
+
 ### a function to make correlation matrices with significance stars
 ### from http://myowelt.blogspot.com/2008/04/beautiful-correlation-tables-in-r.html
 ### usage: kable(corstarsl(as.matrix(data))) 
@@ -1028,4 +1122,67 @@ createUniqueID <- function (dataset, inputColNames) {
   ID_col
 }
 
+
+
+
+
+### function creates weights for multcomp::nls
+### from: https://rmazing.wordpress.com/2012/07/19/a-weighting-function-for-nls-nlslm/
+wfct <- function(expr)
+{
+  expr <- deparse(substitute(expr))
+  
+  ## create new environment
+  newEnv <- new.env()
+  
+  ## get call
+  mc <- sys.calls()[[1]]
+  mcL <- as.list(mc)
+  
+  ## get data and write to newEnv
+  DATA <- mcL[["data"]]
+  DATA <- eval(DATA)
+  DATA <- as.list(DATA)
+  NAMES <- names(DATA)
+  for (i in 1:length(DATA)) assign(NAMES[i], DATA[[i]], envir = newEnv)
+  
+  ## get parameter, response and predictor names
+  formula <- as.formula(mcL[[2]])
+  VARS <- all.vars(formula)
+  RESP <- VARS[1]
+  RHS <- VARS[-1]
+  PRED <- match(RHS, names(DATA))
+  PRED <- names(DATA)[na.omit(PRED)]
+  
+  ## calculate variances for response values if "error" is in expression
+  ## and write to newEnv
+  if (length(grep("error", expr)) > 0) {
+    y <- DATA[[RESP]]
+    x <- DATA[[PRED]]
+    ## test for replication
+    if (!any(duplicated(x))) stop("No replicates available to calculate error from!")
+    ## calculate error
+    error <- tapply(y, x, function(e) var(e, na.rm = TRUE))
+    error <- as.numeric(sqrt(error))
+    ## convert to original repititions
+    error <- rep(error, as.numeric(table(x)))
+    assign("error", error, envir = newEnv)
+  }
+  
+  ## calculate fitted or residual values if "fitted"/"resid" is in expression
+  ## and write to newEnv
+  if (length(grep("fitted", expr)) > 0 || length(grep("resid", expr)) > 0) {
+    mc2 <- mc
+    mc2$weights <- NULL
+    MODEL <- eval(mc2)
+    fitted <- fitted(MODEL)
+    resid <- residuals(MODEL)
+    assign("fitted", fitted, newEnv)
+    assign("resid", resid, newEnv)
+  }
+  
+  ## return evaluation in newEnv: vector of weights
+  OUT <- eval(parse(text = expr), envir = newEnv)
+  return(OUT)
+}
 

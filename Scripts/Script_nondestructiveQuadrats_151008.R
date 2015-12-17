@@ -21,13 +21,15 @@ hgts <- marshName(hgts)
 hgts       <- seasonLabel(hgts)
 hgts$seas  <- substr(hgts$season, 1, 4)
 
+# to calculate estimation errors
+qc <- cwc
 
-### apply region-year-season-specific seasonal allometry (with year-specificity; i.e., "fall 2014 LUM" allometry would be used, rather than the average of all fall LUM1 parameters) to estimate stem masses
+### Approach 1:
+### apply region-year-season-specific allometry (pooling sites; i.e., "fall 2014 LUM" allometry would be used, rather than the average of all fall LUM1 parameters) to estimate stem masses
 ### region-season-specific parameters are in params[[1]]; plot-season-specific parameters are in plotParams[[1]]
-hgts$mass <- as.numeric(NA)
 
 for (i in 1:nrow(hgts)) {
-  # identify site and season
+  # identify region and season
   targetSite <- hgts$marsh[i]
   targetSeas <- hgts$season[i]
   
@@ -43,42 +45,188 @@ for (i in 1:nrow(hgts)) {
   hgts$mass[i] <- coefficient * (hgts$hgt[i] ^ exponent) # bam!
 }
 
+# for error calculation, model known masses
+
+for (i in 1:nrow(qc)) {
+  # identify region and season
+  targetRegion <- qc$marsh[i]
+  targetSeas <- qc$season[i]
+  
+  # find seasonal allometry parameters for the region
+  if (qc$type[i] %in% "LIVE") {
+    coefficient <- params[[1]]$coef.live[(params[[1]]$site %in% targetRegion) & (params[[1]]$season %in% targetSeas)]
+    exponent    <- params[[1]]$exp.live[(params[[1]]$site %in% targetRegion) & (params[[1]]$season %in% targetSeas)]
+  } else if (qc$type[i] %in% "DEAD") {
+    coefficient <- params[[1]]$coef.dead[(params[[1]]$site %in% targetRegion) & (params[[1]]$season %in% targetSeas)]
+    exponent    <- params[[1]]$exp.dead[(params[[1]]$site %in% targetRegion) & (params[[1]]$season %in% targetSeas)]
+  }
+  # apply allometry
+  qc$mass_mod1[i] <- coefficient * (qc$hgt[i] ^ exponent) # bam!
+}
 
 
 
-
-
+##### Approach 2:
+##### Apply region-season-specific allometry: seasonRegionParams
 #####
-##### Or, apply plot-season-specific allometry
-#####
-# hgts$mass2 <- as.numeric(NA)
-# 
-# for (i in 1:nrow(hgts)) {
-#   # identify plot and season
-#   targetSite <- hgts$site[i]
-#   targetSeas <- hgts$season[i]
-#   
-#   # find seasonal allometry parameters for the region
-#   if (hgts$type[i] %in% "LIVE") {
-#     coefficient <- plotParams[[1]]$coef.live[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
-#     exponent    <- plotParams[[1]]$exp.live[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
-#   } else if (hgts$type[i] %in% "DEAD") {
-#     coefficient <- plotParams[[1]]$coef.dead[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
-#     exponent    <- plotParams[[1]]$exp.dead[(plotParams[[1]]$site %in% targetSite) & (plotParams[[1]]$season %in% targetSeas)]
-#   }
-#   # apply allometry
-#   hgts$mass2[i] <- coefficient * (hgts$hgt[i] ^ exponent) # bam!
-# }
-# 
-# 
-# summary(hgts$mass2)
-# summary(hgts$mass2 - hgts$mass) # pretty minor difference, except 97 more NAs
-# hist(hgts$mass2 - hgts$mass, 200, main = "", xlab = "Disparity between two mass estimates")
-# 
-# t.test(hgts$mass2, hgts$mass)
-# 
-# hgts[is.na(hgts$mass2), ]
+seasonRegionParams$season <- substr(as.character(seasonRegionParams$time.period), nchar(as.character(seasonRegionParams$time.period)) - 3, nchar(as.character(seasonRegionParams$time.period)))
+seasonRegionParams$region <- substr(as.character(seasonRegionParams$time.period), 1, nchar(as.character(seasonRegionParams$time.period)) - 5)
+hgts$mass2 <- as.numeric(NA)
 
+for (i in 1:nrow(hgts)) {
+  # identify region and season
+  targetRegion <- hgts$marsh[i]
+  targetSeas <- substr(hgts$season[i], 1, 4)
+  
+  # find seasonal allometry parameters for the region
+  if (hgts$type[i] %in% "LIVE") {
+    coefficient <- seasonRegionParams$coef.live[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+    exponent    <- seasonRegionParams$exp.live[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+  } else if (hgts$type[i] %in% "DEAD") {
+    coefficient <- seasonRegionParams$coef.dead[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+    exponent    <- seasonRegionParams$exp.dead[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+  }
+  # apply allometry
+  hgts$mass2[i] <- coefficient * (hgts$hgt[i] ^ exponent) # bam!
+}
+
+# calculate for known stem masses
+for (i in 1:nrow(qc)) {
+  # identify region and season
+  targetRegion <- qc$marsh[i]
+  targetSeas <- substr(qc$season[i], 1, 4)
+  
+  # find seasonal allometry parameters for the region
+  if (hgts$type[i] %in% "LIVE") {
+    coefficient <- seasonRegionParams$coef.live[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+    exponent    <- seasonRegionParams$exp.live[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+  } else if (hgts$type[i] %in% "DEAD") {
+    coefficient <- seasonRegionParams$coef.dead[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+    exponent    <- seasonRegionParams$exp.dead[(seasonRegionParams$region %in% targetRegion) & (seasonRegionParams$season %in% targetSeas)]
+  }
+  # apply allometry
+  qc$mass_mod2[i] <- coefficient * (qc$hgt[i] ^ exponent) # bam!
+}
+
+
+
+
+
+summary(hgts$mass2)
+summary(hgts$mass2 - hgts$mass) # pretty minor difference, except 97 more NAs
+hist(hgts$mass2 - hgts$mass, 200, main = "", xlab = "Disparity between two mass estimates")
+
+t.test(hgts$mass2, hgts$mass)
+
+hgts[is.na(hgts$mass2), ]
+
+
+
+##### Approach 3:
+##### Apply alternative region-season-specific allometry: 3 phenological seasons (season_altRegionParams)
+#####
+source("C:/RDATA/SPAL_allometry/Script_seasonality_explo_151205.R")
+season_altRegionParams$season <- substr(as.character(season_altRegionParams$time.period), nchar(as.character(season_altRegionParams$time.period)) - 3, nchar(as.character(season_altRegionParams$time.period)))
+season_altRegionParams$region <- substr(as.character(season_altRegionParams$time.period), 1, nchar(as.character(season_altRegionParams$time.period)) - 5)
+hgts$mass3 <- as.numeric(NA)
+
+for (i in 1:nrow(hgts)) {
+  # identify region and season
+  targetRegion <- hgts$marsh[i]
+  if (substr(hgts$moYr[i], 1, 3) %in% seasons_alt[[1]]) {
+    targetSeas <- names(seasons_alt)[1]
+  } else if  (substr(hgts$moYr[i], 1, 3) %in% seasons_alt[[2]]) {
+    targetSeas <- names(seasons_alt)[2]
+  } else if  (substr(hgts$moYr[i], 1, 3) %in% seasons_alt[[3]]) {
+    targetSeas <- names(seasons_alt)[3]
+  }
+  
+  # find seasonal allometry parameters for the region
+  if (hgts$type[i] %in% "LIVE") {
+    coefficient <- season_altRegionParams$coef.live[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+    exponent    <- season_altRegionParams$exp.live[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+  } else if (hgts$type[i] %in% "DEAD") {
+    coefficient <- season_altRegionParams$coef.dead[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+    exponent    <- season_altRegionParams$exp.dead[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+  }
+  # apply allometry
+  hgts$mass3[i] <- coefficient * (hgts$hgt[i] ^ exponent) # bam!
+}
+
+
+# calculate for known stem masses
+for (i in 1:nrow(qc)) {
+  # identify region and season
+  targetRegion <- qc$marsh[i]
+  if (substr(qc$time[i], 1, 3) %in% seasons_alt[[1]]) {
+    targetSeas <- names(seasons_alt)[1]
+  } else if  (substr(qc$time[i], 1, 3) %in% seasons_alt[[2]]) {
+    targetSeas <- names(seasons_alt)[2]
+  } else if  (substr(qc$time[i], 1, 3) %in% seasons_alt[[3]]) {
+    targetSeas <- names(seasons_alt)[3]
+  }
+  
+  # find seasonal allometry parameters for the region
+  if (hgts$type[i] %in% "LIVE") {
+    coefficient <- season_altRegionParams$coef.live[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+    exponent    <- season_altRegionParams$exp.live[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+  } else if (hgts$type[i] %in% "DEAD") {
+    coefficient <- season_altRegionParams$coef.dead[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+    exponent    <- season_altRegionParams$exp.dead[(season_altRegionParams$region %in% targetRegion) & (season_altRegionParams$season %in% targetSeas)]
+  }
+  # apply allometry
+  qc$mass_mod3[i] <- coefficient * (qc$hgt[i] ^ exponent) # bam!
+}
+
+
+
+summary(hgts$mass3)
+summary(hgts$mass3 - hgts$mass)
+hist(hgts$mass3 - hgts$mass, 200, main = "", xlab = "Disparity between two mass estimates")
+
+
+
+##### Approach 4:
+##### Apply single allometry equation (all data pooled)
+#####
+for (i in 1:nrow(hgts)) {
+  if (hgts$type[i] %in% "LIVE") {
+    coefficient <- allParams$coef.live
+    exponent    <- allParams$exp.live
+  } else if (hgts$type[i] %in% "DEAD") {
+    coefficient <- allParams$coef.dead
+    exponent    <- allParams$exp.dead
+  }
+  # apply allometry
+  hgts$mass4[i] <- coefficient * (hgts$hgt[i] ^ exponent) # bam!
+}
+
+# calculate for known stem masses
+for (i in 1:nrow(qc)) {
+  # find seasonal allometry parameters for the region
+  if (hgts$type[i] %in% "LIVE") {
+    coefficient <- allParams$coef.live
+    exponent    <- allParams$exp.live
+  } else if (hgts$type[i] %in% "DEAD") {
+    coefficient <- allParams$coef.dead
+    exponent    <- allParams$exp.dead
+  }
+  # apply allometry
+  qc$mass_mod4[i] <- coefficient * (qc$hgt[i] ^ exponent) # bam!
+}
+
+
+
+summary(qc$mass_mod1 - qc$mass)
+summary(qc$mass_mod2 - qc$mass)
+summary(qc$mass_mod3 - qc$mass) # not a dramatic effect, but of the 'seasonal' models this one performs better
+summary(qc$mass_mod4 - qc$mass)
+
+### calculate root mean squared error
+rmse1 <- sqrt(sum((qc$mass_mod1 - qc$mass)^2, na.rm = T) / sum(!is.na(qc$mass)))
+rmse2 <- sqrt(sum((qc$mass_mod2 - qc$mass)^2, na.rm = T) / sum(!is.na(qc$mass)))
+rmse3 <- sqrt(sum((qc$mass_mod3 - qc$mass)^2, na.rm = T) / sum(!is.na(qc$mass)))
+rmse4 <- sqrt(sum((qc$mass_mod4 - qc$mass)^2, na.rm = T) / sum(!is.na(qc$mass)))
 
 #####
 ##### Figures

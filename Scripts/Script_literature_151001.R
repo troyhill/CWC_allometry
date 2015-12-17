@@ -3,8 +3,15 @@
 
 nappLit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_literatureNAPP_151105.txt", skip = 1)
 
-kable(corstarsl(as.matrix(nappLit[-c(4, 25:nrow(nappLit)), c(12, 11, 10, 15, 8, 9)])))
-plot(nappLit[-c(4, 25:nrow(nappLit)), c(12, 11, 10, 15, 8, 9)])
+# remove all of the Hopkinson et al. 1978 references (use 1980).
+nappLit <- nappLit[!nappLit$source %in% "Hopkinson et al. 1978", ]
+rownames(nappLit) <- 1:nrow(nappLit)
+
+kable(corstarsl(as.matrix(nappLit[c(1:5, 6, 9:15, 17:20), c(12, 11, 10, 15, 8, 9)]))) # includes Gulf coast, Georgia and North Carolina
+kable(corstarsl(as.matrix(nappLit[c(1:4, 6, 9:14, 17:20), c(12, 11, 10, 15, 8, 9)]))) # without north carolina, nothing significant
+plot(nappLit[c(1:4, 6, 9, 17:20), c(12, 11, 10, 15, 8, 9)])
+
+kable(corstarsl(as.matrix(nappLit[c(1:4, 6, 9, 17:20), c(12, 11, 10, 15, 8, 9)]))) # just LA, MS
 
 salit <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_literatureValues_150930_.txt")
 salit$moYr <- as.yearmon(paste0(substr(salit$month, 1, 3), "-", salit$year), "%b-%Y")

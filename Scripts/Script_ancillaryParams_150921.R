@@ -20,7 +20,7 @@ om <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_moisture_OM_150917.tx
 om <- om[, c(1:2, 4:6, 8:9, 12)]
 
 # benthic chlorophyll
-chl <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_benthicChl_150925.txt", skip = 13,
+chl <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_benthicChl_151108.txt", skip = 13,
                   na.strings = "#DIV/0!")
 chl <- chl[!is.na(chl[, 18]), c(1:2, 5, 18:19, 22:23)] # leaving out irrelevant data (meter mark, quadrat)
 
@@ -42,7 +42,7 @@ chlSyringeVol <- chl_syringeArea * 0.5
 ##### Process litter data
 #####
 # rename columns
-names(lit)    <- c("monthYear", "site", "plot", "quadrat", "plants_tin", "tin", "litterMass", "notes")
+names(lit)[1:7]    <- c("monthYear", "site", "plot", "quadrat", "plants_tin", "tin", "litterMass")
 lit$moYr      <- as.character(lit$monthYear)
 lit$monthYear <- as.yearmon(lit$moYr, "%b-%y")
 lit$site      <- gsub(" ", "", as.character(lit$site))
@@ -87,6 +87,19 @@ bg_int <- ddply(bg[, c("moYr", "site", "quadrat", "live.bg", "dead.bg", "total.b
 bg2 <- ddply(bg_int[, c("moYr", "site", "live.bg", "dead.bg", "total.bg", "year")], .(site, moYr, year), colwise(mean, na.rm = T))
 bg2$year   <- as.numeric(substr(as.character(bg2$moYr), 5, 8))
 bg2 <- zeroToNA(bg2) # zeroes should really be NAs (live/dead material not separated)
+# if (is.na(bg2$live.bg)) {
+#   bg2$live.bg <- bg2$total.bg * 0.8
+# }
+# bg2$live.err <- bg2$live.bg * 0.14
+# bg2_melt    <- melt(bg2[, 1:4], id.vars = c("site", "moYr", "year"))
+# bg2_melt.se <- melt(bg2[, c(1:3, 7)], id.vars = c("site", "moYr", "year"))
+# bg2_melt$se <- bg2_melt.se$value
+# bg2_melt$moYr <- as.yearmon(bg2_melt$moYr, format = "%b %Y")
+# ggplot(aes(y = value / 1e3, x = as.numeric(moYr)), data = bg2_melt) + geom_point() + 
+#   geom_errorbar(aes(ymin = (value - se) / 1e3, ymax = (value + se) / 1e3), width = 0) + 
+#   facet_grid(site ~ .) + labs(x = "", y = expression("belowground live biomass (kg "%.%m^-2~")")) + 
+#   theme_bw() + theme(legend.title = element_blank())
+# ggsave("C:/RDATA/SPAL_allometry/belowground_live.png", width = 6, height = 6, units = "in")
 
 
 ### organic matter, water content data
@@ -113,7 +126,7 @@ chl$chlA_vol     <- (chl$chlA_inv * chl_syringeArea) / chlSyringeVol # grams per
 chl$pgmt_vol     <- (chl$chlA_inv * chl_syringeArea) / chlSyringeVol
 chl$chlA_conc    <- chl$chlA_conc / 1e3 # convert concentrations from ug/g to mg/g
 chl$pgmt_conc    <- chl$pgmt_conc / 1e3
-chl$chlA_inv     <- chl$chlA_inv / 1e3 * 1e4 # convert inventories from ug/cm2 to mg/cm2
+chl$chlA_inv     <- chl$chlA_inv / 1e3 * 1e4 # convert inventories from ug/cm2 to mg/m2
 chl$pgmt_inv     <- chl$pgmt_inv / 1e3 * 1e4
 chl$plot         <- gsub(" ", "", as.character(chl$plot))
 chl$sampleName   <- gsub(" ", "", as.character(chl$sampleName))
@@ -124,6 +137,8 @@ chl2    <- ddply(chl[, c(2, 4:ncol(chl))], .(plot, moYr, marsh), colwise(mean, n
 chl2.se <- ddply(chl[, c(2, 4:ncol(chl))], .(plot, moYr, marsh), colwise(se))
 names(chl2.se) <- paste0(names(chl2.se), ".se")
 chl2    <- cbind(chl2, chl2.se[, 4:7])
+summary(chl2[(chl2$marsh %in% "LUM") & (!as.character(chl2$moYr) %in% "Sep 2015"), c(4, 6)])
+
 
 ### nutrients
 names(nuts) <- c("ID", "po4", "no3", "si", "nh4")
@@ -190,7 +205,7 @@ ggplot(m.bay, aes(x = as.numeric(moYr), y = value, col = marsh)) + geom_point() 
 
 ### benthic chlorophyll, by plot
 m.chl    <- melt(chl2[, 1:7], id.vars = c(1:3))
-m.chl.se <- melt(chl2[, c(1:3, 8:11)], id.vars = c(1:3))
+m.chl.se <- melt(chl2[, c(1:3, 10:13)], id.vars = c(1:3))
 m.chl$se <- m.chl.se$value
 
 ggplot(m.chl, aes(x = as.numeric(moYr), y = value, col = plot)) + geom_point() + geom_line() +
