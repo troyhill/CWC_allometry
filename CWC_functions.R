@@ -578,7 +578,9 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
-                     MilnerHughes = "TRUE", summarize = "FALSE", timeCol = "time") {
+                     MilnerHughes = "TRUE", EOSL = "FALSE", EOSL_window = 1,
+                     summarize = "FALSE", timeCol = "time") {
+  # requires that zoo library be loaded (time is converted to yearmon for finding EOSL)
   # implements Smalley (1958) and Milner and Hughes (1968)
   # runs for entire dataset, reports results by year for each plot
   #   dataset = dataframe with your data
@@ -589,6 +591,8 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   #   timeCol = column with time data (in form "%B %Y"). This only matters for the summary statistics, which report peak timing
   #   MilnerHughes      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
   #   summarize = if "TRUE", summary statistics (max NAPP estimates) are reported. TODO: report peak timing
+  #   EOSL    = "TRUE" includes a column calculating September biomass (or closest month in dataset). If there was 
+  #              no sampling within some number of months (+- EOSL_window) of September, value is reported as NA
   #
   # Usage examples: 
   # # Single site, single year
@@ -630,10 +634,15 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   VTS         <- "VTS1975"
   PSC_A       <- "psc.live"
   PSC_B       <- "psc.tot"
+  EOSL_col    <- "EOSL"
   
+  # define acceptable window for EOSL measurement
+  EOSL_target <- as.numeric(as.yearmon("Sep 2016", format = "%B")) - 2016
+  EOSL_high   <- as.numeric(as.yearmon(paste0(month.abb[grep("Sep", month.abb) + EOSL_window], "2016"), format = "%B")) - 2016
+  EOSL_low   <- as.numeric(as.yearmon(paste0(month.abb[grep("Sep", month.abb) - EOSL_window], "2016"), format = "%B")) - 2016
   
   # more variables than necessary are appended to dataset
-  tempData[, PSC_B] <- tempData[, PSC_A] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
+  tempData[, EOSL_col] <- tempData[, PSC_B] <- tempData[, PSC_A] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
     tempData[, eV] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
   
   for (h in 1:length(unique(tempData[, siteCol]))) {
@@ -709,6 +718,20 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       # PSC_B reflects maximum summed biomass when live biomass is at its peak. 
       subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- max(subData2[, liveCol][!is.na(subData2[, liveCol])]) + subData2[, deadCol][subData2[, liveCol][!is.na(subData2[, liveCol])] == max(subData2[, liveCol][!is.na(subData2[, liveCol])])]
       
+      # find "end of season live" biomass
+      # may need to ensure that monthly data exist? could pose a problem when assigning EOSL_biomass and querying months.
+      if(EOSL %in% "TRUE") {
+        # if no sampling occurred in September, widen window
+        if (EOSL_target %in% (as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))))) {
+          EOSL_biomass <- subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOSL_target)]
+        } else if(sum(c(round(seq(from = EOSL_low, to = EOSL_high, by = 1/12), 2) %in% round((as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol])))), 2))) >= 1) {
+          EOSL_biomass <- max(subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) >= EOSL_low) | (as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) <= EOSL_high)], na.rm = TRUE)
+        } else {
+          EOSL_biomass <- NA
+        }
+        subData2[, EOSL_col][subData2[, liveCol] == EOSL_biomass] <- EOSL_biomass
+      }
+      
       
       # add to output dataframe
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), smalley]  <- subData2[, smalley]
@@ -718,6 +741,9 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_A]    <- subData2[, PSC_A]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_B]    <- subData2[, PSC_B]
+      if(EOSL %in% "TRUE") {
+        tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), EOSL_col]   <- subData2[, EOSL_col]
+      }
     }
   }
   
@@ -749,6 +775,13 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
           t.psc.a      = as.character(subData2[, timeCol][which.max(subData2[, PSC_A])]),
           t.psc.b      = as.character(subData2[, timeCol][which.max(subData2[, PSC_B])])
         )
+        
+        # ADD EOSL to intdata if EOSL == TRUE
+        if (EOSL == "TRUE") {
+          intData$napp.EOSL <- ifelse(sum(is.na(subData2[, EOSL_col])) == length(subData2[, EOSL_col]), 
+                                      NA, max(subData2[, EOSL_col], na.rm = T)) 
+        }
+        
         
         if (i != 1 ) {
           finalData <- rbind(finalData, intData)
@@ -1023,7 +1056,8 @@ nappLabelConv <- function(variable, value){
     "maxMin" = "Max-Min",
     "VTS" = "Valiela et al. 1975", 
     "psc.live" = "Peak (live)",
-    "psc.tot" = "Peak (live + dead)"
+    "psc.tot" = "Peak (live + dead)",
+    "eosl"     = "End-of-season live"
   )
   return(names_li[value])
 }
