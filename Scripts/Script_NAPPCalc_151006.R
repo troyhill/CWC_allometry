@@ -3,22 +3,40 @@
 # 1: Plot biomass, stem density, etc. per site per month
 # 2: Estimate biomass in mulitple ways
 #
-# Major change 151006: incorporated un-clipped plots. 
 #####
 
 
 
 ##### load libraries, run previous scripts
 #####
-# library(ggplot2)
+library(corrgram)
+library(corrplot)
 library(reshape2)
 library(plyr)
-library(dplyr)
+library(dplyr) # for bind_rows()
+library(Hmisc) # for function rcorr()
 # 'cwc' object has compiled raw allometry data
 # run scripts that this code depends on:
 source("C:/RDATA/SPAL_allometry/CWC_allometry/Scripts/Script_nondestructiveQuadrats_151008.R")
 par(fig = c(0,1,0,1), mar = c(4, 4.5, 0.5, 0.5))
 #####
+
+cor.mtest <- function(mat, conf.level = 0.95){
+  mat <- as.matrix(mat)
+  n <- ncol(mat)
+  p.mat <- lowCI.mat <- uppCI.mat <- matrix(NA, n, n)
+  diag(p.mat) <- 0
+  diag(lowCI.mat) <- diag(uppCI.mat) <- 1
+  for(i in 1:(n-1)){
+    for(j in (i+1):n){
+      tmp <- cor.test(mat[,i], mat[,j], conf.level = conf.level)
+      p.mat[i,j] <- p.mat[j,i] <- tmp$p.value
+      lowCI.mat[i,j] <- lowCI.mat[j,i] <- tmp$conf.int[1]
+      uppCI.mat[i,j] <- uppCI.mat[j,i] <- tmp$conf.int[2]
+    }
+  }
+  return(list(p.mat, lowCI.mat, uppCI.mat))
+}
 
 todaysDate <- substr(as.character(Sys.time()), 1, 10)
 
@@ -37,6 +55,7 @@ hist(hgts$mass)
 ### Add quadrat column to CWC and combine with hgts
 cwc$quadrat <- "A"
 
+# columns to remove
 hgt_cols <- which(!names(hgts) %in% c("seas", "notes", "analyst", "mass", "mass2", "mass3"))
 
 ### which mass column to use (differ by allometry equations used to estimate masses)
@@ -89,7 +108,7 @@ for (i in 1:length(unique(CWC.plots$site))) {
     if (nrow(subData) > 0) {
       for (h in 1:length(unique(CWC.plots$quadrat))) {
         subData2 <- subData[subData$quadrat %in% unique(CWC.plots$quadrat)[h], ]
-        ### if all three categories are missing for a quadrat, it 
+        ### Assumption: if all three categories are missing for a quadrat, it 
         ### is most likely that the quadrat simply wasn't sampled.
          if (nrow(subData2) == 0) {
            fillData         <- subData[1, ]
@@ -130,7 +149,7 @@ nrow(CWC.plots)
 CWC.plots$year <- paste0("20", substr(as.character(CWC.plots$monthYear), 5, 6))
 # write.csv(CWC.plots, file = "C:/RDATA/SPAL_allometry/CWC_plotData_151127.csv")
 # write.csv(missingData, file = "C:/RDATA/SPAL_allometry/missingData_151008_2.csv") # samples that we are saying has mass = 0
-nrow(missingData) # 36: 151213
+nrow(missingData) # 41: 160111
 ### May 2014 - no litter, anywhere?
 rm(missingData)
 
@@ -455,21 +474,38 @@ segments(comb.ag$numTime[comb.ag$marsh %in% "LUM"], I((comb.ag$MOM[comb.ag$marsh
 #  if (e < 0) e <- 0
 
 # "dead" column in napp is the sum of standing dead and litter
-napp2 <- nappCalc(napp, summarize = "TRUE")
+napp2 <- nappCalc(napp, summarize = "TRUE", EOSL = "TRUE", EOSL_window = 0)
 
 # napp2$summary
 napp2$summary <- marshName(napp2$summary)
-plot(napp2$summary[, 5:10])
-# correlations for LUM (2013 & 2014)
-kable(corstarsl(as.matrix(napp2$summary[napp2$summary$marsh %in% "LUM", 5:10])))
+plot(napp2$summary[, c(5:10, 17)])
+plot(napp2$summary[napp2$summary$marsh %in% "LUM", c(5:10, 17)])
+# correlations for LUM (all years)
+kable(corstarsl(as.matrix(napp2$summary[napp2$summary$marsh %in% "LUM", c(5:6, 8:9, 17)]))) # n = 8-21 (each site-year counted as independent obs)
+
+corrgram(napp2$summary[, c(5:10, 17)], order = NULL, lower.panel = panel.shade, 
+         upper.panel = NULL, text.panel = panel.txt, 
+         main = "")
+
+
+
+M    <- cor(napp2$summary[, c(5:6, 8:9, 17)], use = "complete.obs")
+res1 <- cor.mtest(napp2$summary[, c(5:6, 8:9, 17)], 0.95)
+corrplot(M, p.mat = res1[[1]], method = "circle", type = "lower", insig = "blank")
+
+kable(corstarsl(as.matrix(napp2$summary[, c(5:6, 8:9, 17)])))
+
+
 
 # correlations for all sites (2013 & 2014)
-kable(corstarsl(as.matrix(napp2$summary[((napp2$summary$year != 2015)), 5:10])))
+kable(corstarsl(as.matrix(napp2$summary[((napp2$summary$year != 2015)), c(5:10, 17)])))
 
-### this is kind of interesting. Compare with literature values
+
+
+### this is kind of interesting (except n = 2 for some comparisons). Compare with literature values
 for (i in 2013:2015) {
   yr <- as.character(i)
-  print(kable(corstarsl(as.matrix(napp2$summary[(napp2$summary$year == yr), 5:10]))))
+  print(kable(corstarsl(as.matrix(napp2$summary[(napp2$summary$year == yr), c(5:10, 17)]))))
   print(noquote(yr))
 }
 
@@ -488,7 +524,8 @@ dd.napp   <- ddply(napp2$summary, .(marsh, year), summarise,
                    maxMin   = mean(napp.maxMin, na.rm = T),
                    VTS      = mean(napp.VTS, na.rm = T),
                    psc.live = mean(napp.psc.a, na.rm = T),
-                   psc.tot  = mean(napp.psc.b, na.rm = T)
+                   psc.tot  = mean(napp.psc.b, na.rm = T),
+                   eosl     = mean(napp.EOSL, na.rm = T)
                   )
 dd.napp.se   <- ddply(napp2$summary, .(marsh, year), summarise,
                    smalley.se  = se(napp.smalley),
@@ -496,7 +533,8 @@ dd.napp.se   <- ddply(napp2$summary, .(marsh, year), summarise,
                    maxMin.se   = se(napp.maxMin),
                    VTS.se      = se(napp.VTS),
                    psc.live.se = se(napp.psc.a),
-                   psc.tot.se  = se(napp.psc.b)
+                   psc.tot.se  = se(napp.psc.b),
+                   eosl.se     = se(napp.EOSL)
                    )
 
 m.napp     <- melt(dd.napp, id.vars = c("marsh", "year"))
@@ -513,13 +551,13 @@ ggplot(m.napp, aes(x = year, y = value, col = marsh)) + geom_point() +
   theme_bw() + theme(legend.title = element_blank())
 # ggsave("C:/RDATA/SPAL_allometry/NAPP_compare.png", width = 7, height= 7, units = "in", dpi = 300)
 
-ggplot(m.napp[m.napp$marsh %in% "LUM", ], aes(x = year, y = value, fill = variable)) + 
+ggplot(m.napp[(m.napp$marsh %in% "LUM") & (m.napp$variable %in% unique(m.napp$variable)[c(1:2, 4:5, 7)]), ], aes(x = year, y = value, fill = variable)) + 
   geom_bar(stat = "identity", position = "dodge") + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
                 width = 0, position = position_dodge(width = 0.9)) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
-  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-Min",
-           "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Valiela et al. 1975", 
+                                 "Peak (live)", "End-of-season live")) +
   theme_bw() + theme(legend.title = element_blank())
 pngName <- paste0("C:/RDATA/SPAL_allometry/NAPP_compare_LUM_", todaysDate, ".png")
 ggsave(pngName, width = 7, height= 4, units = "in", dpi = 300)
@@ -527,13 +565,14 @@ ggsave(pngName, width = 7, height= 4, units = "in", dpi = 300)
 
 
 
-ggplot(m.napp, aes(x = year, y = value, fill = variable)) + 
+ggplot(m.napp[m.napp$variable %in% unique(m.napp$variable)[c(1:2, 4:5, 7)], ], 
+       aes(x = year, y = value, fill = variable)) + 
   geom_bar(stat = "identity", position = "dodge") + facet_grid(marsh ~ ., scale = "free_y") +
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
                 width = 0, position = position_dodge(width = 0.9)) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
-  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-Min",
-                                 "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
+  scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Valiela et al. 1975", 
+                                 "Peak (live)", "End-of-season live")) +
   theme_bw() + theme(legend.title = element_blank())
 pngName <- paste0("C:/RDATA/SPAL_allometry/NAPP_compare_allSites_", todaysDate, ".png")
 ggsave(pngName, width = 6, height= 6, units = "in", dpi = 300)
@@ -541,13 +580,13 @@ ggsave(pngName, width = 6, height= 6, units = "in", dpi = 300)
 
 
 
-ggplot(m.napp[(m.napp$variable %in% c("smalley", "VTS", "psc.live")) & (m.napp$marsh %in% "LUM"),], aes(x = year, y = value, fill = variable)) + 
+ggplot(m.napp[(m.napp$variable %in% c("smalley", "VTS", "eosl")) & (m.napp$marsh %in% "LUM"),], aes(x = year, y = value, fill = variable)) + 
   geom_bar(stat = "identity", position = "dodge") + 
   geom_errorbar(aes(ymin = value - value.se, ymax = value + value.se),
                 width = 0, position = position_dodge(width = 0.9)) + 
   labs(x = "", y = expression("NAPP (g "%.%m^-2%.%yr^-1~")")) + 
     scale_fill_discrete(labels = c("Smalley 1959", 
-                                   "Valiela et al. 1975", "Peak live standing crop")) +
+                                   "Valiela et al. 1975", "End-of-season live")) +
   #   scale_fill_discrete(labels = c("Smalley 1959", "Milner & Hughes 1968", "Max-Min",
 #                                  "Valiela et al. 1975", "Peak (live)", "Peak (live + dead)")) +
   theme_bw() + theme(legend.title = element_blank())
@@ -581,8 +620,8 @@ abpp$rtToSht <- abpp$bg_maxMin_a / abpp$napp.psc.b # ratio of below:aboveground 
 
 
 qplot(y = rtToSht, x = year, data = abpp, col = site)
-ddply(abpp[, c(2:11, 17, 19:20, 22)], .(marsh, year), numcolwise(mean))
-ddply(abpp[, c(2:11, 17, 19:20, 22)], .(marsh, year), numcolwise(se))
+ddply(abpp[, c(2:11, 17, 18, 20:21, 23)], .(marsh, year), numcolwise(mean))
+ddply(abpp[, c(2:11, 17, 18, 20:21, 23)], .(marsh, year), numcolwise(se))
 
 
 #####
@@ -607,27 +646,173 @@ ddply(abpp[, c(2:11, 17, 19:20, 22)], .(marsh, year), numcolwise(se))
 
 ### Create GRIID-C output 
 ### individual stem masses & heights
-quadNames <- which(names(quadrats) %in% c("marsh", "site", "monthYear", "quadrat", "type", "hgt", "mass"))
-gridC_allom <- quadrats[, quadNames[c(5, 1, 6, 7, 3, 4)]]
-gridC_allom$marsh[gridC_allom$marsh %in% "TB-B"] <- "Lake Barre"
-gridC_allom$marsh[gridC_allom$marsh %in% "TB-A"] <- "Bay La Fleur"
-gridC_allom$marsh[gridC_allom$marsh %in% "LUM"] <- "LUMCON"
-gridC_allom$mass_source[gridC_allom$quadrat %in% c("B", "C")] <- "allometry"
-gridC_allom$mass_source[gridC_allom$quadrat %in% c("A")] <- "harvest"
-gridC_allom$monthYear <- paste0(substr(gridC_allom$monthYear, 1, 3), " 20", substr(gridC_allom$monthYear, 5, 6))
+quadNames <- which(names(quadrats) %in% c("marsh", "site", "time", "quadrat", "type", "hgt", "mass", "ID"))
+gridC_allom <- quadrats[, quadNames]
+gridC_allom$year  <- substr(gridC_allom$time, 5, 9)
+gridC_allom$month <- substr(gridC_allom$time, 1, 3)
+# latitude
+gridC_allom$latitude[gridC_allom$site %in% "TB1"]  <- 29.29316111
+gridC_allom$latitude[gridC_allom$site %in% "TB2"]  <- 29.29139722
+gridC_allom$latitude[gridC_allom$site %in% "TB3"]  <- 29.30445
+gridC_allom$latitude[gridC_allom$site %in% "TB4"]  <- 29.29659167
+gridC_allom$latitude[gridC_allom$site %in% "LUM1"] <- 29.2554
+gridC_allom$latitude[gridC_allom$site %in% "LUM2"] <- 29.25605278
+gridC_allom$latitude[gridC_allom$site %in% "LUM3"] <- 29.25796944
+  # longitude
+gridC_allom$longitude[gridC_allom$site %in% "TB1"]  <- -90.60505
+gridC_allom$longitude[gridC_allom$site %in% "TB2"]  <- -90.60300556
+gridC_allom$longitude[gridC_allom$site %in% "TB3"]  <- -90.56475833
+gridC_allom$longitude[gridC_allom$site %in% "TB4"]  <- -90.54983333
+gridC_allom$longitude[gridC_allom$site %in% "LUM1"] <- -90.66478889
+gridC_allom$longitude[gridC_allom$site %in% "LUM2"] <- -96.818075
+gridC_allom$longitude[gridC_allom$site %in% "LUM3"] <- -90.66144444
 
-# write.csv(gridC_allom, file = "C:/RDATA/SPAL_allometry/GRIIDC/CWC1/StemData_151213.csv")
+gridC_allom$dist  <- 20
+gridC_allom$dist[gridC_allom$site %in% "LUM3"] <- 10
+
+
+gridC_allom$marsh[gridC_allom$marsh %in% "TB-B"] <- "Lake Barre"
+gridC_allom$marsh[gridC_allom$marsh %in% "TB-A"] <- "Bay LaFleur"
+gridC_allom$marsh[gridC_allom$marsh %in% "LUM"] <- "LUMCON"
+gridC_allom$mass[gridC_allom$quadrat %in% c("B", "C")] <- NA
+gridC_allom$ID <- toupper(gridC_allom$ID)
+
+gridC_allom <- gridC_allom[order(gridC_allom$marsh, gridC_allom$site, gridC_allom$time, gridC_allom$type, gridC_allom$quadrat), ]
+
+dataset11 <- gridC_allom[, c("year", "month", "marsh", "site", "latitude", "longitude", "dist", "quadrat", "ID", "type", "hgt", "mass")]
+
+# write.csv(dataset11[dataset11$year < 2015, ], file = "C:/RDATA/SPAL_allometry/GRIIDC/CWC1/dataset11_160105.csv")
+# write.csv(dataset11[dataset11$year == 2015, ], file = "C:/RDATA/SPAL_allometry/GRIIDC/CWC2/dataset11_160105.csv")
 
 
 ### allometry parameters
 seasonRegionParams
 # write.csv(seasonRegionParams, file = "C:/RDATA/SPAL_allometry/GRIIDC/CWC1/AllometryParameters_151213.csv")
 
-### aggregate site data: snapshot data
-gridC_monthlySiteData <- napp2[[1]]
-gridC_monthlySiteData$monthYear <- gridC_monthlySiteData$time
-gridC_monthlySiteData <- gridC_monthlySiteData[order(gridC_monthlySiteData$marsh, gridC_monthlySiteData$site, gridC_monthlySiteData$time), ]
-# write.csv(gridC_monthlySiteData[, !names(gridC_monthlySiteData) %in% "time"], file = "C:/RDATA/SPAL_allometry/GRIIDC/CWC1/MonthlySiteData_151213.csv")
+### aggregate quadrat-level data
+uniqueIDcols <- c("site", "quadrat", "monthYear", "dist")
+quadData <- ddply(CWC.plots, .(year, monthYear, marsh, site, quadrat), summarise,
+                  # first, live-stem data
+                  stemDens.l       =  stems[type %in% "LIVE"],
+                  lngth.med.l      =  lngth.median[type %in% "LIVE"],
+                  biomass.l        =  mass[type %in% "LIVE"], 
+                  stemDens.d       =  stems[type %in% "DEAD"],
+                  lngth.med.d      =  lngth.median[type %in% "DEAD"],
+                  biomass.d        =  mass[type %in% "DEAD"],
+                  biomass.litter   =  mass[type %in% "LITTER"]
+)
+# add latitude & longitude
+for (i in 1:nrow(quadData)) {
+  quadData$latitude[i]  <- gridC_allom$latitude[gridC_allom$site %in% quadData$site[i]][1]
+  quadData$longitude[i] <- gridC_allom$longitude[gridC_allom$site %in% quadData$site[i]][1]
+}
+
+quadData$monthYear <- as.character(as.yearmon(quadData$monthYear, "%b-%y"))
+quadData$dist <- 20
+quadData$dist[quadData$site %in% "LUM3"] <- 10
+quadData$ID   <- createUniqueID(quadData, uniqueIDcols)
+
+# belowground biomass
+bg.quad  <- zeroToNA(bg_int)
+names(bg.quad)[3] <- "monthYear"
+bg.quad$dist <- 20
+bg.quad$dist[bg.quad$site %in% "LUM3"] <- 10
+bg.quad$ID <- createUniqueID(bg.quad, uniqueIDcols)
+
+
+
+# site conditions (bay salinity, conductivity, temp)
+# set bay conditions in distinct columns, rather than rows
+siteCond <- read.delim("C:/RDATA/SPAL_allometry/data_LUM123/data_surfaceWater_151129.txt", skip = 2)
+head(siteCond)
+names(siteCond)[3] <- "monthYear"
+siteCond$monthYear <- as.yearmon(siteCond$monthYear, "%b-%y")
+siteCond$quadrat   <- "A"
+siteCond$dist      <- 20
+siteCond$dist[(siteCond$site %in% "LUM3")] <- 10
+siteCond$ID        <- createUniqueID(siteCond, uniqueIDcols)
+
+# split into bay, 5m and 20m
+bay.cond    <- siteCond[siteCond$loc %in% c("BAY"), ]
+five.cond   <- siteCond[siteCond$loc %in% c("5M"), ]
+twenty.cond <- siteCond[siteCond$loc %in% c("20M"), ]
+
+names(bay.cond)[4:6]    <- paste0(names(bay.cond)[4:6], ".bay")
+names(five.cond)[4:8]   <- paste0(names(five.cond)[4:8], ".5m")
+names(twenty.cond)[4:8] <- paste0(names(twenty.cond)[4:8], ".20m")
+
+
+
+
+# soil properties
+head(om2)
+names(om2)[2] <- "monthYear"
+om2$quadrat   <- "A"
+om2$dist      <- 20
+om2$dist[om2$site %in% "LUM3"] <- 10
+om2$ID <- createUniqueID(om2, uniqueIDcols)
+
+
+# benthic chl
+chl2$quadrat     <- "A"
+names(chl2)[1:2] <- c("site", "monthYear")
+chl2$dist        <- 20
+chl2$dist[chl2$site %in% "LUM3"] <- 10
+chl2$ID          <- createUniqueID(chl2, uniqueIDcols)
+
+# surface water nutrient data (porewater nutrients not available)
+nuts.quad <- nuts[nuts$loc %in% c("BAY", "5M", "20M"), ]
+names(nuts.quad)[8] <- "monthYear"
+nuts.quad$quadrat   <- "A"
+nuts.quad$dist      <- 20
+nuts.quad$dist[(nuts.quad$site %in% "LUM3")] <- 10
+nuts.quad$ID        <- createUniqueID(nuts.quad, uniqueIDcols)
+nuts.quad[duplicated(nuts.quad$ID), ]
+
+# split into bay, 5m and 20m
+bay.nuts    <- nuts.quad[nuts.quad$loc %in% c("BAY"), ]
+five.nuts   <- nuts.quad[nuts.quad$loc %in% c("5M"), ]
+twenty.nuts <- nuts.quad[nuts.quad$loc %in% c("20M"), ]
+
+names(bay.nuts)[2:5]    <- paste0(names(bay.nuts)[2:5], ".bay")
+names(five.nuts)[2:5]   <- paste0(names(five.nuts)[2:5], ".5m")
+names(twenty.nuts)[2:5] <- paste0(names(twenty.nuts)[2:5], ".20m")
+
+
+gridC_plotData <- join_all(list(quadData, bg.quad[, c(5:7, 9)], 
+                                om2[, c(3:13, 16)], chl2[, c(4:5, 18)], 
+                                bay.cond[, c(4:6, 13)], bay.nuts[, c(1:5)], 
+                                five.nuts[, 1:5], five.cond[, c(4:8, 13)],
+                                twenty.nuts[, 1:5], twenty.cond[, c(4:8, 13)]),
+                           by = "ID", type = "full")
+gridC_plotData$site      <- sapply(strsplit(gridC_plotData$ID, split = "-"), "[", 1)
+gridC_plotData$quadrat   <- sapply(strsplit(gridC_plotData$ID, split = "-"), "[", 2)
+gridC_plotData$monthYear <- as.yearmon(sapply(strsplit(gridC_plotData$ID, split = "-"), "[", 3), "%b %Y")
+gridC_plotData$month     <- substr(gridC_plotData$monthYear, 1, 3)
+gridC_plotData$year      <- substr(gridC_plotData$monthYear, 5, 8)
+gridC_plotData$dist      <- sapply(strsplit(gridC_plotData$ID, split = "-"), "[", 4)
+for (i in 1:nrow(gridC_plotData)) {
+  if (gridC_plotData[i, "site"] %in% paste0("LUM", 1:3)) {
+    gridC_plotData$marsh[i] <- "LUMCON"    
+  } else if (gridC_plotData[i, "site"] %in% c("TB1", "TB2")) {
+    gridC_plotData$marsh[i] <- "Bay LaFleur"
+  } else if (gridC_plotData[i, "site"] %in% c("TB3", "TB4")) {
+    gridC_plotData$marsh[i] <- "Lake Barre"
+  }
+}
+gridC_plotData <- gridC_plotData[order(gridC_plotData$marsh, gridC_plotData$site, gridC_plotData$monthYear, as.numeric(gridC_plotData$dist)), ]
+gridC_plotData <- gridC_plotData[!is.na(gridC_plotData$marsh), ]
+nrow(gridC_plotData)
+length(unique(gridC_plotData$ID))
+
+dataset12 <- gridC_plotData[, c("year", "month", "marsh", "latitude", "longitude", "site", "quadrat",
+                                names(gridC_plotData)[6:12],
+                                names(gridC_plotData)[17:19],
+                                names(gridC_plotData)[31:32],
+                                names(gridC_plotData)[c(20:22, 27:30, 36:39, 33:35)],
+                                names(gridC_plotData)[c(40:57)]
+                                )] # excludes porewater nutrients
+# write.csv(dataset12, file = "C:/RDATA/SPAL_allometry/GRIIDC/CWC1/plotData_160105.csv")
 
 ### aggregate data: annual data
 abpp
@@ -642,4 +827,3 @@ dd.napp # dd.napp.se
 ##### 
 #####
 #####
-
