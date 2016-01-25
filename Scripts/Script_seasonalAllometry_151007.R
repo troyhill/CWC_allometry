@@ -212,7 +212,7 @@ for (i in 1:length(unique(substr(cwc$season, 6, 7)))) {
 }
 
 
-### Allometry for each site (combining regions, seasons, and years)
+### Allometry for each site (combining seasons and years)
 for (i in 1:length(unique(cwc$site))) {
   targ <- unique(cwc$site)[i]
   a <- getParams(cwc[cwc$site %in% targ, ], timeName = targ,
