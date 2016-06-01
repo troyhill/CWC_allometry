@@ -578,9 +578,9 @@ PSC <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", s
 
 
 nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "year", siteCol = "site", 
-                     MilnerHughes = "TRUE", EOSL = "FALSE", EOSL_window = 1,
+                     MilnerHughes = "TRUE", EOS = "FALSE", EOS_window = 1,
                      summarize = "FALSE", timeCol = "time") {
-  # requires that zoo library be loaded (time is converted to yearmon for finding EOSL)
+  # requires that zoo library be loaded (time is converted to yearmon for finding EOS)
   # implements Smalley (1958) and Milner and Hughes (1968)
   # runs for entire dataset, reports results by year for each plot
   #   dataset = dataframe with your data
@@ -591,8 +591,8 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   #   timeCol = column with time data (in form "%B %Y"). This only matters for the summary statistics, which report peak timing
   #   MilnerHughes      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
   #   summarize = if "TRUE", summary statistics (max NAPP estimates) are reported. TODO: report peak timing
-  #   EOSL    = "TRUE" includes a column calculating September biomass (or closest month in dataset). If there was 
-  #              no sampling within some number of months (+- EOSL_window) of September, value is reported as NA
+  #   EOS    = "TRUE" includes a column calculating September biomass (or closest month in dataset). If there was 
+  #              no sampling within some number of months (+- EOS_window) of September, value is reported as NA
   #
   # Usage examples: 
   # # Single site, single year
@@ -634,15 +634,15 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   VTS         <- "VTS1975"
   PSC_A       <- "psc.live"
   PSC_B       <- "psc.tot"
-  EOSL_col    <- "EOSL"
+  EOS_col     <- "eos"
   
-  # define acceptable window for EOSL measurement
-  EOSL_target <- as.numeric(as.yearmon("Sep 2016", format = "%B")) - 2016
-  EOSL_high   <- as.numeric(as.yearmon(paste0(month.abb[grep("Sep", month.abb) + EOSL_window], "2016"), format = "%B")) - 2016
-  EOSL_low   <- as.numeric(as.yearmon(paste0(month.abb[grep("Sep", month.abb) - EOSL_window], "2016"), format = "%B")) - 2016
+  # define acceptable window for EOS measurement
+  EOS_target <- as.numeric(as.yearmon("Sep 2016", format = "%B")) - 2016
+  EOS_high   <- as.numeric(as.yearmon(paste0(month.abb[grep("Sep", month.abb) + EOS_window], "2016"), format = "%B")) - 2016
+  EOS_low   <- as.numeric(as.yearmon(paste0(month.abb[grep("Sep", month.abb) - EOS_window], "2016"), format = "%B")) - 2016
   
   # more variables than necessary are appended to dataset
-  tempData[, EOSL_col] <- tempData[, PSC_B] <- tempData[, PSC_A] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
+  tempData[, EOS_col] <- tempData[, PSC_B] <- tempData[, PSC_A] <- tempData[, VTS] <- tempData[, MH] <- tempData[, smalley] <- tempData[, smalley.inc] <- 
     tempData[, eV] <- tempData[, dead.inc] <- tempData[, live.inc] <- as.numeric(NA) 
   
   for (h in 1:length(unique(tempData[, siteCol]))) {
@@ -718,18 +718,19 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       # PSC_B reflects maximum summed biomass when live biomass is at its peak. 
       subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- max(subData2[, liveCol][!is.na(subData2[, liveCol])]) + subData2[, deadCol][subData2[, liveCol][!is.na(subData2[, liveCol])] == max(subData2[, liveCol][!is.na(subData2[, liveCol])])]
       
-      # find "end of season live" biomass
-      # may need to ensure that monthly data exist? could pose a problem when assigning EOSL_biomass and querying months.
-      if(EOSL %in% "TRUE") {
+      # find "end of season" biomass
+      # may need to ensure that monthly data exist? could pose a problem when assigning EOS_biomass and querying months.
+      if(EOS %in% countsAsTrue) {
         # if no sampling occurred in September, widen window
-        if (EOSL_target %in% (as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))))) {
-          EOSL_biomass <- subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOSL_target)]
-        } else if(sum(c(round(seq(from = EOSL_low, to = EOSL_high, by = 1/12), 2) %in% round((as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol])))), 2))) >= 1) {
-          EOSL_biomass <- max(subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) >= EOSL_low) | (as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) <= EOSL_high)], na.rm = TRUE)
+        if (round(EOS_target, 2) %in% round((as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol])))), 2)) {
+          EOS_biomass <- subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOS_target)] +
+            subData2[, deadCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOS_target)]
+        # } else if(sum(c(round(seq(from = EOS_low, to = EOS_high, by = 1/12), 2) %in% round((as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol])))), 2))) >= 1) {
+          # EOS_biomass <- max(subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) >= EOS_low) | (as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) <= EOS_high)], na.rm = TRUE)
         } else {
-          EOSL_biomass <- NA
+          EOS_biomass <- NA
         }
-        subData2[, EOSL_col][subData2[, liveCol] == EOSL_biomass] <- EOSL_biomass
+        subData2[, EOS_col][subData2[, liveCol] + subData2[, deadCol] == EOS_biomass] <- EOS_biomass
       }
       
       
@@ -741,8 +742,8 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), VTS]      <- subData2[, VTS]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_A]    <- subData2[, PSC_A]
       tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), PSC_B]    <- subData2[, PSC_B]
-      if(EOSL %in% "TRUE") {
-        tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), EOSL_col]   <- subData2[, EOSL_col]
+      if(EOS %in% countsAsTrue) {
+        tempData[(tempData[, siteCol] %in% targetSite) & (tempData[, yearCol] %in% targetYear), EOS_col]   <- subData2[, EOS_col]
       }
     }
   }
@@ -776,10 +777,10 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
           t.psc.b      = as.character(subData2[, timeCol][which.max(subData2[, PSC_B])])
         )
         
-        # ADD EOSL to intdata if EOSL == TRUE
-        if (EOSL == "TRUE") {
-          intData$napp.EOSL <- ifelse(sum(is.na(subData2[, EOSL_col])) == length(subData2[, EOSL_col]), 
-                                      NA, max(subData2[, EOSL_col], na.rm = T)) 
+        # ADD EOS to intdata if EOS == TRUE
+        if (EOS %in% countsAsTrue) {
+          intData$napp.EOS <- ifelse(sum(is.na(subData2[, EOS_col])) == length(subData2[, EOS_col]), 
+                                      NA, max(subData2[, EOS_col], na.rm = T)) 
         }
         
         
@@ -1057,7 +1058,7 @@ nappLabelConv <- function(variable, value){
     "VTS" = "Valiela et al. 1975", 
     "psc.live" = "Peak (live)",
     "psc.tot" = "Peak (live + dead)",
-    "eosl"     = "End-of-season live"
+    "eos"     = "End-of-season live"
   )
   return(names_li[value])
 }
@@ -1219,4 +1220,3 @@ wfct <- function(expr)
   OUT <- eval(parse(text = expr), envir = newEnv)
   return(OUT)
 }
-
