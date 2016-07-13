@@ -234,7 +234,7 @@ getParams <- function (dataset, massCol = "mass", heightCol = "hgt", typeCol = "
       max.x <- max(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
       xVals <- c((min.x * 100):(max.x * 100)) / 100
       modeled <- returnVals[1, paste0("coef.", biomassType)] * xVals ^ (returnVals[1, paste0("exp.", biomassType)])
-      lines(x = xVals, y = modeled, lty = i, col = "red")
+      lines(x = xVals, y = modeled, lty = 2, col = "red")
       text(x = median(dataset[, heightCol], na.rm = T), y = 0.7 * max(dataset[, massCol], na.rm = T), 
            cex = 0.85, title_of_plot)
       
@@ -254,11 +254,13 @@ getParams <- function (dataset, massCol = "mass", heightCol = "hgt", typeCol = "
            y = dataset[, massCol][tolower(dataset[, typeCol]) %in% biomassType], 
            pch = 19, cex = 0.8, las = 1)
     # predicted values
+    if (sum(!is.na(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType])) > cutOff) {
     min.x <- min(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
     max.x <- max(dataset[, heightCol][tolower(dataset[, typeCol]) %in% biomassType], na.rm = T)
     xVals <- c((min.x * 100):(max.x * 100)) / 100
     modeled <- returnVals[1, paste0("coef.", biomassType)] * xVals ^ (returnVals[1, paste0("exp.", biomassType)])
     lines(x = xVals, y = modeled, lty = i, col = "red")
+    }
     text(x = median(dataset[, heightCol], na.rm = T), y = 0.7 * max(dataset[, massCol], na.rm = T), 
          cex = 0.85, title_of_plot)
     if (savePlot == TRUE) {
@@ -589,9 +591,9 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
   #   yearCol = name of the column with year (4 digits)
   #   siteCol = name of the column with plot name
   #   timeCol = column with time data (in form "%B %Y"). This only matters for the summary statistics, which report peak timing
-  #   MilnerHughes      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing live biomass)
+  #   MilnerHughes      = if "TRUE", also implements Millner & Hughes 1968 (sum of positive changes in standing *live* biomass)
   #   summarize = if "TRUE", summary statistics (max NAPP estimates) are reported. TODO: report peak timing
-  #   EOS    = "TRUE" includes a column calculating September biomass (or closest month in dataset). If there was 
+  #   EOS    = "TRUE" includes a column calculating September *live* biomass (or closest month in dataset). If there was 
   #              no sampling within some number of months (+- EOS_window) of September, value is reported as NA
   #
   # Usage examples: 
@@ -715,7 +717,7 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       
       # sum peak standing crop increments
       subData2[, PSC_A][!is.na(subData2[, liveCol])]                       <- cummax(subData2[, liveCol][!is.na(subData2[, liveCol])])
-      # PSC_B reflects maximum summed biomass when live biomass is at its peak. 
+      # PSC_B reflects maximum summed (live + dead) biomass when live biomass is at its peak. 
       subData2[, PSC_B][!is.na(subData2[, liveCol] + subData2[, deadCol])] <- max(subData2[, liveCol][!is.na(subData2[, liveCol])]) + subData2[, deadCol][subData2[, liveCol][!is.na(subData2[, liveCol])] == max(subData2[, liveCol][!is.na(subData2[, liveCol])])]
       
       # find "end of season" biomass
@@ -723,14 +725,15 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
       if(EOS %in% countsAsTrue) {
         # if no sampling occurred in September, widen window
         if (round(EOS_target, 2) %in% round((as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol])))), 2)) {
-          EOS_biomass <- subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOS_target)] +
-            subData2[, deadCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOS_target)]
+          EOS_biomass <- subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOS_target)] # +
+            #subData2[, deadCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) == EOS_target)]
         # } else if(sum(c(round(seq(from = EOS_low, to = EOS_high, by = 1/12), 2) %in% round((as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol])))), 2))) >= 1) {
           # EOS_biomass <- max(subData2[, liveCol][(as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) >= EOS_low) | (as.numeric(as.yearmon(subData2[, timeCol])) - floor(as.numeric(as.yearmon(subData2[, timeCol]))) <= EOS_high)], na.rm = TRUE)
         } else {
           EOS_biomass <- NA
         }
-        subData2[, EOS_col][subData2[, liveCol] + subData2[, deadCol] == EOS_biomass] <- EOS_biomass
+        subData2[, EOS_col][subData2[, liveCol]  == EOS_biomass] <- EOS_biomass
+        #subData2[, EOS_col][subData2[, liveCol] + subData2[, deadCol] == EOS_biomass] <- EOS_biomass
       }
       
       
@@ -1220,3 +1223,4 @@ wfct <- function(expr)
   OUT <- eval(parse(text = expr), envir = newEnv)
   return(OUT)
 }
+
