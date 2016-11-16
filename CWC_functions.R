@@ -54,9 +54,17 @@ mergeMonths <- function (dataset_list) {
                           "lf_ind", "leafMass", "thirdLeaf_ind", "thirdLeafMass",
                           "mass")
       # re-calculate leaf/stem masses, subtracting tin mass
-      dataset$leafMass      <- dataset$leafMass - (dataset$lf_ind * dataset$tin)
-      dataset$thirdLeafMass <- dataset$thirdLeafMass - (dataset$thirdLeaf_ind * dataset$tin)
-      dataset$stemMass      <- dataset$stemMass - (dataset$stm_ind * dataset$tin)
+      for (i in 1:nrow(dataset)) {
+        if(!is.na(dataset[i, 6])) { # if this column is used, tin masses were assumed (not measured)
+          dataset$leafMass[i]      <- dataset$leafMass[i] - (dataset$lf_ind[i] * dataset$tin[i])
+          dataset$thirdLeafMass[i] <- dataset$thirdLeafMass[i] - (dataset$thirdLeaf_ind[i] * dataset$tin[i])
+          dataset$stemMass[i]      <- dataset$stemMass[i] - (dataset$stm_ind[i] * dataset$tin[i])
+        } else {
+          dataset$leafMass[i]      <- dataset$leafMass[i] - dataset$lf_ind[i]
+          dataset$thirdLeafMass[i] <- dataset$thirdLeafMass[i] - dataset$thirdLeaf_ind[i]
+          dataset$stemMass[i]      <- dataset$stemMass[i] - dataset$stm_ind[i]
+        }
+      }
     } else if (!names(dataset)[8] %in% "mass") {
       names(dataset) <- c("site", "time", "type", "ID", "hgt", "tin", "tin_plant", "mass")
       dataset[, c("stm_ind", "stemMass", "lf_ind", "leafMass", "thirdLeaf_ind", "thirdLeafMass")] <- as.numeric(NA)
@@ -584,7 +592,9 @@ nappCalc <- function(dataset, liveCol = "live", deadCol = "dead", yearCol = "yea
                      summarize = "FALSE", timeCol = "time") {
   # requires that zoo library be loaded (time is converted to yearmon for finding EOS)
   # implements Smalley (1958) and Milner and Hughes (1968)
-  # runs for entire dataset, reports results by year for each plot
+  # runs for entire dataset, reports results by year (unique value in "yearCol") for each site (unique value in "siteCol")
+  # Does not make assumptions about returns to zero. If that assumption is desired (e.g., if large gaps exist between sampling intervals), 
+  # it is recommended to run this function separately for each year
   #   dataset = dataframe with your data
   #   liveCol = name of the column with live biomass data
   #   deadCol = name of the column with dead biomass data
